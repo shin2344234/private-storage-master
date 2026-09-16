@@ -24,3 +24,6 @@ keys.local.env
 .claude/
 .vscode/
 .idea/
+
+# Game data extracted from the PAZ archives. Regenerate with the paz tools.
+extracted/

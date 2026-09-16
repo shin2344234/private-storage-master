@@ -1,0 +1,28 @@
+#pragma once
+#include <string>
+#include <vector>
+
+namespace psm::Log
+{
+    // printf-style. Lines are buffered until Claim(); after that they go to
+    // <base>.log next to the plugin. A copy of recent lines is always kept in
+    // memory either way.
+    void Write(const char* level, const char* fmt, ...);
+
+    // `base` names the file and its archives: "PrivateStorageMaster" gives
+    // PrivateStorageMaster.log and PrivateStorageMaster.01.log upwards.
+    //
+    // It is a parameter because two processes load this plugin. Session one
+    // put both of them in one file: lines from each landed at the other's file
+    // offset, one was cut in half and three vanished, and the result read as
+    // three hooks failing when all five had installed. Whoever is not the game
+    // gets its own name and never touches the real log.
+    void Claim(const wchar_t* base);
+    bool Claimed();
+    void Shutdown();
+    void Snapshot(std::vector<std::string>& out, int maxLines);
+}
+
+#define LOG(...)     ::psm::Log::Write("info ", __VA_ARGS__)
+#define LOG_OK(...)  ::psm::Log::Write("ok   ", __VA_ARGS__)
+#define LOG_ERR(...) ::psm::Log::Write("error", __VA_ARGS__)
