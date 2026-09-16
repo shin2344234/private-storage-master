@@ -1,0 +1,8 @@
+#pragma once
+
+// Nothing has shipped under this name yet. Bump it with the release that goes
+// with it, never on its own.
+#define PSM_VERSION  "1.0.0"
+#define PSM_NAME     "Private Storage Master"
+// The game build the offsets and patterns were last checked against.
+#define PSM_GAME     "2.02.00"
