@@ -36,6 +36,7 @@ namespace psm::probe2850
     inline constexpr uint32_t kEventMgrWrapOff = 0x9A8;
     inline constexpr uint32_t kStageMgrVtable  = 0x54BA6F0;  // ClientSequencerStageManager, holds the InputBlock registry at +0x200
     inline constexpr uint32_t kGameWndProc     = 0x3E57F30;  // class procedure of the game's main window, a jmp stub (R3E 5.1)
+    inline constexpr uint32_t kItemMgrGlobal   = 0x6C2E2E8;  // ItemInfo manager, read by +0x384DF0
     inline constexpr uint32_t kInvMgrGlobal    = 0x6C2E2C8;  // InventoryInfoManager, RTTI slots 2 and 3 agree
     inline constexpr uint32_t kUiRootGlobal    = 0x6C2DA48;  // +0x98 phase manager, +0x68 windows (R3E)
     inline constexpr uint32_t kActorMgrGlobal  = 0x6C2D9F0;  // [[[g]+0x30]+0x58]+0xD8 controlled character (R3C)

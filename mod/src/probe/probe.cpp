@@ -855,6 +855,97 @@ namespace psm::probe
         BucketSnap g_snap[128];
         int g_snapCount = -1;
 
+        // ItemInfo manager (+0x6C2E2E8, read by +0x384DF0): +0x08 count, +0x58
+        // record pointers (null until loaded). Record: name at **(rec+8) like
+        // InventoryInfo, category byte +0xA3 (compared by the pushable test
+        // +0x1A153B0 against the u8 in inventory pushable/excluded lists).
+        uintptr_t ItemRecord(uint16_t index)
+        {
+            uintptr_t mgr = 0, arr = 0, rec = 0;
+            uint32_t n = 0;
+            if (!mem::ReadPtr(Abs(kItemMgrGlobal), &mgr) || !mem::Read32(mgr + 0x08, &n) || index >= n) return 0;
+            if (!mem::ReadPtr(mgr + 0x58, &arr) || !mem::ReadPtr(arr + 8ull * index, &rec)) return 0;
+            return rec;
+        }
+
+        bool ItemName(uintptr_t rec, char* out, size_t cap)
+        {
+            out[0] = 0;
+            uintptr_t node = 0, text = 0;
+            return rec && mem::ReadPtr(rec + 8, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
+        }
+
+        void DumpItemCategories()
+        {
+            uintptr_t mgr = 0;
+            uint32_t n = 0;
+            if (!mem::ReadPtr(Abs(kItemMgrGlobal), &mgr) || !mem::Read32(mgr + 0x08, &n) || n > 0x10000)
+            {
+                LOG("[items] item manager not readable (global +%X)", kItemMgrGlobal);
+                return;
+            }
+            uint32_t perCat[256] = {}, loaded = 0;
+            char sample[256][48] = {};
+            uint32_t gearCats[256] = {};
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                const uintptr_t rec = ItemRecord(static_cast<uint16_t>(i));
+                uint8_t cat = 0;
+                if (!rec || !mem::Read8(rec + 0xA3, &cat)) continue;
+                ++loaded;
+                ++perCat[cat];
+                char name[96];
+                if (!ItemName(rec, name, sizeof name)) continue;
+                if (!sample[cat][0]) snprintf(sample[cat], sizeof sample[cat], "%s", name);
+                if (strstr(name, "AbyssGear") && strncmp(name, "Recipe", 6) != 0) ++gearCats[cat];
+                if ((cat == 102 || cat == 103) && perCat[cat] <= 12) LOG("[items]   category %u: [%u] %s", cat, i, name);
+            }
+            LOG("[items] item manager %llX, %u records, %u loaded", U(mgr), n, loaded);
+            for (int c = 0; c < 256; ++c)
+                if (perCat[c])
+                    LOG("[items] category %3d: %5u items, Abyss gears %u, e.g. %s", c, perCat[c], gearCats[c], sample[c]);
+        }
+
+        // What a bucket holds, by category, with a few names.
+        void DumpBucketItems(const char* want)
+        {
+            uintptr_t ch = 0;
+            const uintptr_t holder = PlayerHolder(&ch);
+            uintptr_t arr = 0; uint32_t n = 0;
+            if (!holder || !mem::ReadPtr(holder + 0x18, &arr) || !mem::Read32(holder + 0x20, &n) || n > 128) return;
+            for (uint32_t b = 0; b < n; ++b)
+            {
+                uintptr_t bk = 0, slots = 0;
+                uint16_t index = 0, used = 0;
+                uint32_t size = 0;
+                if (!mem::ReadPtr(arr + 8ull * b, &bk) || !mem::Read16(bk + 0x10, &index) || !mem::Read16(bk + 0x12, &used)) continue;
+                char bname[64];
+                if (!RecordName(index, bname, sizeof bname) || strcmp(bname, want) != 0) continue;
+                mem::ReadPtr(bk, &slots);
+                mem::Read32(bk + 0x08, &size);
+                uint32_t perCat[256] = {}, shown = 0, filled = 0;
+                for (uint32_t k = 0; k < (size & 0xFFFF) && k < 1460; ++k)
+                {
+                    uint16_t item = 0xFFFF;
+                    int64_t count = 0;
+                    if (!mem::Read16(slots + 0xC8ull * k + 0x08, &item) || item == 0xFFFF) continue;
+                    mem::ReadBytes(slots + 0xC8ull * k + 0x10, &count, sizeof count);
+                    if (count <= 0) continue;
+                    ++filled;
+                    const uintptr_t rec = ItemRecord(item);
+                    uint8_t cat = 0;
+                    if (rec) mem::Read8(rec + 0xA3, &cat);
+                    ++perCat[cat];
+                    char iname[96] = "?";
+                    ItemName(rec, iname, sizeof iname);
+                    if (shown++ < 15) LOG("[bucket-items] %s slot %u item %u x%lld category %u %s", want, k, item, static_cast<long long>(count), cat, iname);
+                }
+                LOG("[bucket-items] %s: used %u, %u filled slots of %u", want, used, filled, size & 0xFFFF);
+                for (int c = 0; c < 256; ++c)
+                    if (perCat[c]) LOG("[bucket-items] %s category %d: %u", want, c, perCat[c]);
+            }
+        }
+
         void DumpBuckets(bool diffOnly)
         {
             uintptr_t ch = 0;
@@ -1042,6 +1133,9 @@ namespace psm::probe
                     LOG("[probe] Pause");
                     DumpInventoryInfo();
                     DumpBuckets(false);
+                    DumpItemCategories();
+                    DumpBucketItems("Kuku");
+                    DumpBucketItems("Character");
                     if (const uintptr_t c = g_warehouse.load()) { ControllerLine("Pause", c); DumpController(c); }
                     if (const uintptr_t mo = g_modeObj.load())
                     {
@@ -1119,7 +1213,7 @@ namespace psm::probe
         Hook(kInputBlockSet, hkInputBlock, &oInputBlock);
         Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
-        LOG("[probe] probe 2f running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
+        LOG("[probe] probe 2g running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
             "Camp Straw, Bird Feed, Town Warehouse; "
             "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
         return true;
