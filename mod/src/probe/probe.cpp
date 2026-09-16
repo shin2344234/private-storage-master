@@ -18,8 +18,8 @@
 //
 // Keys. While Ctrl is held the probe swallows every F key and End before the
 // game window sees them, so they reach nothing but the probe:
-//   Ctrl+F1..F5  open or close Private Storage, Gatherables, Dresser,
-//                Refrigerator, Collecting
+//   Ctrl+F1..F8  open or close Private Storage, Gatherables, Dresser,
+//                Refrigerator, Collecting, Camp Straw, Bird Feed, Town Warehouse
 //   Ctrl+F12     panic: post 0x0F for whatever the controller holds, drop the
 //                IngameMenu phase and the input block
 //   Ctrl+End     toggle the 0x12, 0x14 and 0x0D packets a natural open also sends
@@ -140,20 +140,33 @@ namespace psm::probe
             const char* label;
             const char* setInventory;
             const char* title;
-            const char* modalHash;   // sub 0x07 text of a natural 0x0D packet
+            const char* modalHash;   // sub 0x07 text of a natural 0x0D packet; nullptr: the chart sends no 0x0D
             const char* titleHash;   // sub 0x08 text of the 0x14 header: lookup3 of the lowercased title key
+            const char* icon;        // sub 0x0B of the 0x14 header; nullptr: the chart leaves it empty
+            const char* extra;       // another 0x15 command sent before SetInventory, or nullptr
         };
+        // From the stage charts (private/research/r12_all_uicontrol.txt, R4-storage-containers.md).
         const Chest kChests[] = {
             { "Private Storage", "SetInventory(Character,Focus,True,Default;CampWareHouse,Focus,True,Default)",
-              "SetWareHouseInventoryName(UI_WareHouse_CampStroage)", "197270237", "1494912655" },
+              "SetWareHouseInventoryName(UI_WareHouse_CampStroage)", "197270237", "1494912655", "cd_icon_map_bank", nullptr },
             { "Gatherables", "SetInventory(Character,Focus,True;Housing_GatheredMaterials,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingGatheredMaterials)", "2520550823", "1329171849" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingGatheredMaterials)", "2520550823", "1329171849", "cd_icon_map_bank", nullptr },
             { "Dresser", "SetInventory(Character,Focus,True;Housing_Dresser,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingFurnitureDresser)", "2520550823", "1469492791" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingFurnitureDresser)", "2520550823", "1469492791", "cd_icon_map_bank", nullptr },
             { "Refrigerator", "SetInventory(Character,Focus,True;Housing_Refrigerator,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingRefrigerator)", "2520550823", "295797541" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingRefrigerator)", "2520550823", "295797541", "cd_icon_map_bank", nullptr },
             { "Collecting", "SetInventory(Character,Focus,True;Housing_Collecting,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingCollecting)", "2520550823", "52739647" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingCollecting)", "2520550823", "52739647", "cd_icon_map_bank", nullptr },
+            // New in probe 2f: the camp feed bin, the bird feeder, and the town warehouse
+            // NPC (its WareHouse function variant, without SetDonationFaction, which
+            // needs the NPC actor, and without the 0x09 NPC packet).
+            { "Camp Straw", "SetInventory(Character,Focus,True;CampStraw,Focus,True)",
+              "SetWareHouseInventoryName(UI_WareHouse_CampStraw)", "2520550823", "502364378", "cd_icon_map_bank", nullptr },
+            { "Bird Feed", "SetInventory(Character,Focus,True;BirdFeed,Focus,True)",
+              "SetWareHouseInventoryName(UI_WareHouse_BirdFeed)", "2933432374", "3229017175", "cd_icon_map_bank", nullptr },
+            { "Town Warehouse",
+              "SetInventory(Character,Focus,True,Default;WareHouse,Focus,True;Wagon,NearWagon,False;PetAndVehicle,NearMercenary_Vehicle,False;Ship,Ship,False)",
+              "SetWareHouseInventoryName(UI_WareHouse_Stroage)", nullptr, "2638607143", nullptr, "ShowPackageCampMoneyList()" },
         };
         constexpr int kChestCount = static_cast<int>(sizeof kChests / sizeof kChests[0]);
 
@@ -416,25 +429,31 @@ namespace psm::probe
             if (g_fidelity.load())
             {
                 Post(0x12, id, idNode, nullptr, 0);
-                // 0x14 header, as the natural camp open sent it: sub 0x0B type 1
-                // "cd_icon_map_bank", sub 0x08 type 9 title hash. Routed to vt+0x4A0.
-                Arg iconArg{};  iconArg.type = 1;  iconArg.value = reinterpret_cast<uint64_t>(MakeSs("cd_icon_map_bank"));
+                // 0x14 header: sub 0x0B type 1 icon (empty in the NPC charts), sub 0x08
+                // type 9 title hash. Routed to vt+0x4A0.
+                Arg iconArg{};  iconArg.type = 1;  iconArg.value = reinterpret_cast<uint64_t>(MakeSs(c.icon ? c.icon : ""));
                 Arg titleArg{}; titleArg.type = 9; titleArg.value = reinterpret_cast<uint64_t>(MakeSs(c.titleHash));
                 Sub header[2]{};
-                header[0].kind = 0x0B; header[0].args = &iconArg;  header[0].count = header[0].cap = 1;
+                header[0].kind = 0x0B; header[0].args = c.icon ? &iconArg : nullptr; header[0].count = header[0].cap = c.icon ? 1 : 0;
                 header[1].kind = 0x08; header[1].args = &titleArg; header[1].count = header[1].cap = 1;
                 Post(0x14, id, idNode, header, 2);
-                Arg hashArg{}; hashArg.type = 9; hashArg.value = reinterpret_cast<uint64_t>(MakeSs(c.modalHash));
-                Sub s7{}; s7.kind = 0x07; s7.args = &hashArg; s7.count = s7.cap = 1;
-                Post(0x0D, id, idNode, &s7, 1);
+                if (c.modalHash)
+                {
+                    Arg hashArg{}; hashArg.type = 9; hashArg.value = reinterpret_cast<uint64_t>(MakeSs(c.modalHash));
+                    Sub s7{}; s7.kind = 0x07; s7.args = &hashArg; s7.count = s7.cap = 1;
+                    Post(0x0D, id, idNode, &s7, 1);
+                }
             }
 
-            Arg invArg{};  invArg.type = 5;  invArg.value = reinterpret_cast<uint64_t>(MakeSs(c.setInventory));
-            Arg nameArg{}; nameArg.type = 5; nameArg.value = reinterpret_cast<uint64_t>(MakeSs(c.title));
-            Sub cmds[2]{};
-            cmds[0].kind = 0x0E; cmds[0].args = &invArg;  cmds[0].count = cmds[0].cap = 1;
-            cmds[1].kind = 0x0E; cmds[1].args = &nameArg; cmds[1].count = cmds[1].cap = 1;
-            Post(0x15, id, idNode, cmds, 2);
+            Arg extraArg{}; extraArg.type = 5; extraArg.value = reinterpret_cast<uint64_t>(MakeSs(c.extra ? c.extra : ""));
+            Arg invArg{};   invArg.type = 5;   invArg.value = reinterpret_cast<uint64_t>(MakeSs(c.setInventory));
+            Arg nameArg{};  nameArg.type = 5;  nameArg.value = reinterpret_cast<uint64_t>(MakeSs(c.title));
+            Sub cmds[3]{};
+            uint32_t n = 0;
+            if (c.extra) { cmds[n].kind = 0x0E; cmds[n].args = &extraArg; cmds[n].count = cmds[n].cap = 1; ++n; }
+            cmds[n].kind = 0x0E; cmds[n].args = &invArg;  cmds[n].count = cmds[n].cap = 1; ++n;
+            cmds[n].kind = 0x0E; cmds[n].args = &nameArg; cmds[n].count = cmds[n].cap = 1; ++n;
+            Post(0x15, id, idNode, cmds, n);
             Post(0x0E, id, idNode, nullptr, 0);
         }
 
@@ -976,7 +995,7 @@ namespace psm::probe
 
         DWORD WINAPI Poller(LPVOID)
         {
-            bool keyWas[11] = {};   // F1..F5, F12, End, ..., Pause
+            bool keyWas[11] = {};   // [0..7] Ctrl+F1..F8, [8] F12, [9] End, [10] Pause
             DWORD nextBucketPoll = 0;
             while (!g_stop.load())
             {
@@ -1007,15 +1026,15 @@ namespace psm::probe
                     keyWas[k] = d;
                 }
                 const bool panic = ctrl && Down(VK_F12);
-                if (panic && !keyWas[5]) { LOG("[probe] Ctrl+F12: panic close"); g_pending = kActPanic; }
-                keyWas[5] = panic;
+                if (panic && !keyWas[8]) { LOG("[probe] Ctrl+F12: panic close"); g_pending = kActPanic; }
+                keyWas[8] = panic;
                 const bool fid = ctrl && Down(VK_END);
-                if (fid && !keyWas[6])
+                if (fid && !keyWas[9])
                 {
                     g_fidelity = !g_fidelity.load();
                     LOG("[probe] Ctrl+End: 0x12, 0x14 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
                 }
-                keyWas[6] = fid;
+                keyWas[9] = fid;
 
                 const bool pause = front && Down(VK_PAUSE);
                 if (pause && !keyWas[10])
@@ -1100,7 +1119,8 @@ namespace psm::probe
         Hook(kInputBlockSet, hkInputBlock, &oInputBlock);
         Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
-        LOG("[probe] probe 2e running. Ctrl+F1..F5 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting; "
+        LOG("[probe] probe 2f running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
+            "Camp Straw, Bird Feed, Town Warehouse; "
             "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
         return true;
     }
