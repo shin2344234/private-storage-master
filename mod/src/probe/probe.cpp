@@ -576,23 +576,30 @@ namespace psm::probe
             return r;
         }
 
-        uintptr_t __fastcall hkItemDetail(uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d)
+        // These openers take stack arguments (+0xD968E0 has eight). A detour that
+        // does anything after the call must forward the stack slots too, or the
+        // callee reads the detour's own frame: that was the probe 2c crash.
+        uintptr_t __fastcall hkItemDetail(uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6,
+                                          uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10, uintptr_t a11, uintptr_t a12)
         {
-            LOG("[modal] item detail opener (%llX %llX)", U(a), U(b));
-            return static_cast<Fn4>(oItemDetail)(a, b, c, d);
+            LOG("[modal] item detail opener (%llX %llX)", U(a1), U(a2));
+            return static_cast<Fn12>(oItemDetail)(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12);
         }
-        uintptr_t __fastcall hkCounting(uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d)
+        uintptr_t __fastcall hkCounting(uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6,
+                                        uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10, uintptr_t a11, uintptr_t a12)
         {
             char st[256]; StackLine(st, sizeof st);
-            const uintptr_t r = static_cast<Fn4>(oCounting)(a, b, c, d);
-            LOG("[modal] counting opener (%llX %llX %llX %llX) returned %llX | %s", U(a), U(b), U(c), U(d), U(r), st);
+            const uintptr_t r = static_cast<Fn12>(oCounting)(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12);
+            LOG("[modal] counting opener (%llX %llX %llX %llX | %llX %llX %llX %llX) returned %llX | %s", U(a1), U(a2), U(a3), U(a4), U(a5),
+                U(a6), U(a7), U(a8), U(r), st);
             return r;
         }
 
         // Warehouse2 slot 116 (+0xCB0190): a dialog's result. For the quantity
         // dialog it runs +0xCA6CB0, which needs dialog == ctrl+0x2D0, a focused
         // item at ctrl+0x1C0 and a move rule index at ctrl+0x234.
-        uintptr_t __fastcall hkMoveDialogConfirm(uintptr_t ctrl, uintptr_t dialog, uintptr_t flag, uintptr_t r9)
+        uintptr_t __fastcall hkMoveDialogConfirm(uintptr_t ctrl, uintptr_t dialog, uintptr_t flag, uintptr_t r9, uintptr_t a5, uintptr_t a6,
+                                                 uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10, uintptr_t a11, uintptr_t a12)
         {
             uintptr_t d2d0 = 0, focus = 0;
             uint32_t rule = 0, list = 0;
@@ -606,7 +613,7 @@ namespace psm::probe
             LOG("[confirm] slot 116 ctrl %llX dialog %llX (ctrl+2D0 %llX%s) flag %u r9 %llX focus %llX item %04X count %lld rule %d list %u | %s",
                 U(ctrl), U(dialog), U(d2d0), dialog == d2d0 ? ", match" : ", NO MATCH", static_cast<unsigned>(flag & 0xFF), U(r9), U(focus),
                 slotKey, static_cast<long long>(count), static_cast<int>(rule), list, st);
-            return static_cast<Fn4>(oMoveDialogConfirm)(ctrl, dialog, flag, r9);
+            return static_cast<Fn12>(oMoveDialogConfirm)(ctrl, dialog, flag, r9, a5, a6, a7, a8, a9, a10, a11, a12);
         }
 
         // The reset loop at the head of +0xCAB6B0, run by hand for our own screen.
