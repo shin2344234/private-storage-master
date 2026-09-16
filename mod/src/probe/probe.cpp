@@ -339,10 +339,10 @@ namespace psm::probe
                         }
                     }
                 }
-                const bool down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+                const bool down = (GetAsyncKeyState(VK_PAUSE) & 0x8000) != 0;
                 if (down && !f10)
                 {
-                    LOG("[probe] F10");
+                    LOG("[probe] Pause");
                     DumpInventoryInfo();
                     if (const uintptr_t c = g_warehouse.load()) DumpController(c);
                     if (const uintptr_t mo = g_modeObj.load())
@@ -351,7 +351,7 @@ namespace psm::probe
                         mem::ReadBytes(mo + 0x20, m, sizeof m);
                         char hex[0x40 * 3 + 1] = {};
                         for (int i = 0; i < 0x40; ++i) snprintf(hex + i * 3, 4, "%02X ", m[i]);
-                        LOG("[mode] F10 %llX +20: %s", static_cast<unsigned long long>(mo), hex);
+                        LOG("[mode] Pause %llX +20: %s", static_cast<unsigned long long>(mo), hex);
                     }
                     uintptr_t root = 0, menu = 0;
                     if (mem::ReadPtr(Abs(kMenuRootGlobal), &root)) mem::ReadPtr(root + 0x98, &menu);
@@ -411,7 +411,7 @@ namespace psm::probe
         Hook(kCounting, hkCounting, &oCounting);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
         LOG("[probe] running. Open the camp storage and each housing chest in person, open an item's details and "
-            "a quantity dialog, close with Esc, and press F10 once with a chest open and once in the world.");
+            "a quantity dialog, close with Esc, and press Pause once with a chest open and once in the world.");
         return true;
     }
 
