@@ -22,7 +22,7 @@
 //                Refrigerator, Collecting
 //   Ctrl+F12     panic: post 0x0F for whatever the controller holds, drop the
 //                IngameMenu phase and the input block
-//   Ctrl+End     toggle the 0x12 and 0x0D packets a natural open also sends
+//   Ctrl+End     toggle the 0x12, 0x14 and 0x0D packets a natural open also sends
 //                (on by default in this build)
 //   Pause        dump inventory records, buckets, controller and phase
 
@@ -141,18 +141,19 @@ namespace psm::probe
             const char* setInventory;
             const char* title;
             const char* modalHash;   // sub 0x07 text of a natural 0x0D packet
+            const char* titleHash;   // sub 0x08 text of the 0x14 header: lookup3 of the lowercased title key
         };
         const Chest kChests[] = {
             { "Private Storage", "SetInventory(Character,Focus,True,Default;CampWareHouse,Focus,True,Default)",
-              "SetWareHouseInventoryName(UI_WareHouse_CampStroage)", "197270237" },
+              "SetWareHouseInventoryName(UI_WareHouse_CampStroage)", "197270237", "1494912655" },
             { "Gatherables", "SetInventory(Character,Focus,True;Housing_GatheredMaterials,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingGatheredMaterials)", "2520550823" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingGatheredMaterials)", "2520550823", "1329171849" },
             { "Dresser", "SetInventory(Character,Focus,True;Housing_Dresser,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingFurnitureDresser)", "2520550823" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingFurnitureDresser)", "2520550823", "1469492791" },
             { "Refrigerator", "SetInventory(Character,Focus,True;Housing_Refrigerator,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingRefrigerator)", "2520550823" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingRefrigerator)", "2520550823", "295797541" },
             { "Collecting", "SetInventory(Character,Focus,True;Housing_Collecting,Focus,True)",
-              "SetWareHouseInventoryName(UI_WareHouse_HousingCollecting)", "2520550823" },
+              "SetWareHouseInventoryName(UI_WareHouse_HousingCollecting)", "2520550823", "52739647" },
         };
         constexpr int kChestCount = static_cast<int>(sizeof kChests / sizeof kChests[0]);
 
@@ -415,6 +416,14 @@ namespace psm::probe
             if (g_fidelity.load())
             {
                 Post(0x12, id, idNode, nullptr, 0);
+                // 0x14 header, as the natural camp open sent it: sub 0x0B type 1
+                // "cd_icon_map_bank", sub 0x08 type 9 title hash. Routed to vt+0x4A0.
+                Arg iconArg{};  iconArg.type = 1;  iconArg.value = reinterpret_cast<uint64_t>(MakeSs("cd_icon_map_bank"));
+                Arg titleArg{}; titleArg.type = 9; titleArg.value = reinterpret_cast<uint64_t>(MakeSs(c.titleHash));
+                Sub header[2]{};
+                header[0].kind = 0x0B; header[0].args = &iconArg;  header[0].count = header[0].cap = 1;
+                header[1].kind = 0x08; header[1].args = &titleArg; header[1].count = header[1].cap = 1;
+                Post(0x14, id, idNode, header, 2);
                 Arg hashArg{}; hashArg.type = 9; hashArg.value = reinterpret_cast<uint64_t>(MakeSs(c.modalHash));
                 Sub s7{}; s7.kind = 0x07; s7.args = &hashArg; s7.count = s7.cap = 1;
                 Post(0x0D, id, idNode, &s7, 1);
@@ -1004,7 +1013,7 @@ namespace psm::probe
                 if (fid && !keyWas[6])
                 {
                     g_fidelity = !g_fidelity.load();
-                    LOG("[probe] Ctrl+End: 0x12 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
+                    LOG("[probe] Ctrl+End: 0x12, 0x14 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
                 }
                 keyWas[6] = fid;
 
@@ -1091,8 +1100,8 @@ namespace psm::probe
         Hook(kInputBlockSet, hkInputBlock, &oInputBlock);
         Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
-        LOG("[probe] probe 2c running. Ctrl+F1..F5 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting; "
-            "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x0D packets (on); Pause dumps state.");
+        LOG("[probe] probe 2e running. Ctrl+F1..F5 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting; "
+            "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
         return true;
     }
 
