@@ -16,14 +16,15 @@
 // the game's own StageChartUIControl event wrap and an owned close, per
 // private/research/R3-storage-system.md sections 5 and 6.
 //
-// Keys (the probe swallows the digit and Pause messages so they do not reach
-// skills; Ctrl and Shift themselves still reach the game):
-//   Ctrl+Shift+1..5  open or close Private Storage, Gatherables, Dresser,
-//                    Refrigerator, Collecting
-//   Ctrl+Shift+9     also send the 0x12 and 0x0D packets a natural open sends
-//   Ctrl+Shift+0     panic: post 0x0F for whatever the controller holds and
-//                    drop the IngameMenu phase
-//   Pause            dump inventory records, buckets, controller and phase
+// Keys. While Ctrl is held the probe swallows every F key and End before the
+// game window sees them, so they reach nothing but the probe:
+//   Ctrl+F1..F5  open or close Private Storage, Gatherables, Dresser,
+//                Refrigerator, Collecting
+//   Ctrl+F12     panic: post 0x0F for whatever the controller holds, drop the
+//                IngameMenu phase and the input block
+//   Ctrl+End     toggle the 0x12 and 0x0D packets a natural open also sends
+//                (on by default in this build)
+//   Pause        dump inventory records, buckets, controller and phase
 
 namespace psm::probe
 {
@@ -162,7 +163,7 @@ namespace psm::probe
         // Requests from the poller, run on the main thread inside the mode switch.
         enum : int { kActNone = -1, kActClose = 100, kActPanic = 101 };
         std::atomic<int>  g_pending{kActNone};
-        std::atomic<bool> g_fidelity{false};
+        std::atomic<bool> g_fidelity{true};
 
         // Remote screen state. Written on the main thread; the atomics are read by the poller.
         std::atomic<bool>     g_remoteOpen{false};
@@ -174,7 +175,7 @@ namespace psm::probe
 
         void* oHandler = nullptr, *oSetInventory = nullptr, *oMenuRequest = nullptr, *oModeSwitch = nullptr,
             *oItemDetail = nullptr, *oCounting = nullptr, *oWarehouseClose = nullptr, *oListener = nullptr,
-            *oMoveCheck = nullptr, *oMoveSend = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr;
+            *oMoveCheck = nullptr, *oMoveSend = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr, *oMoveDialogConfirm = nullptr;
 
         // InputBlock registry (ClientSequencerStageManager +0x200). The chart adds
         // {stage id, 2} on open and removes it on close; mode 2 applies the
@@ -582,8 +583,30 @@ namespace psm::probe
         }
         uintptr_t __fastcall hkCounting(uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d)
         {
-            LOG("[modal] counting opener (%llX %llX)", U(a), U(b));
-            return static_cast<Fn4>(oCounting)(a, b, c, d);
+            char st[256]; StackLine(st, sizeof st);
+            const uintptr_t r = static_cast<Fn4>(oCounting)(a, b, c, d);
+            LOG("[modal] counting opener (%llX %llX %llX %llX) returned %llX | %s", U(a), U(b), U(c), U(d), U(r), st);
+            return r;
+        }
+
+        // Warehouse2 slot 116 (+0xCB0190): a dialog's result. For the quantity
+        // dialog it runs +0xCA6CB0, which needs dialog == ctrl+0x2D0, a focused
+        // item at ctrl+0x1C0 and a move rule index at ctrl+0x234.
+        uintptr_t __fastcall hkMoveDialogConfirm(uintptr_t ctrl, uintptr_t dialog, uintptr_t flag, uintptr_t r9)
+        {
+            uintptr_t d2d0 = 0, focus = 0;
+            uint32_t rule = 0, list = 0;
+            mem::Read64(ctrl + 0x2D0, &d2d0);
+            mem::Read64(ctrl + 0x1C0, &focus);
+            mem::Read32(ctrl + 0x234, &rule);
+            mem::Read32(ctrl + 0x230, &list);
+            uint64_t count = 0; uint16_t slotKey = 0;
+            if (focus) { mem::Read16(focus + 0x838, &slotKey); mem::Read64(focus + 0x840, &count); }
+            char st[256]; StackLine(st, sizeof st);
+            LOG("[confirm] slot 116 ctrl %llX dialog %llX (ctrl+2D0 %llX%s) flag %u r9 %llX focus %llX item %04X count %lld rule %d list %u | %s",
+                U(ctrl), U(dialog), U(d2d0), dialog == d2d0 ? ", match" : ", NO MATCH", static_cast<unsigned>(flag & 0xFF), U(r9), U(focus),
+                slotKey, static_cast<long long>(count), static_cast<int>(rule), list, st);
+            return static_cast<Fn4>(oMoveDialogConfirm)(ctrl, dialog, flag, r9);
         }
 
         // The reset loop at the head of +0xCAB6B0, run by hand for our own screen.
@@ -627,24 +650,19 @@ namespace psm::probe
         uintptr_t __fastcall hkListener(uintptr_t root, uintptr_t actor, uintptr_t view, uintptr_t sel, uintptr_t stageId, uintptr_t data)
         {
             char v[64];
-            if (ReadSsRef(view, v, sizeof v) && strcmp(v, "WareHouseView") == 0)
+            uintptr_t vt = 0;
+            if (mem::ReadPtr(root, &vt) && vt == Abs(kWarehouseVtable) && ReadSsRef(view, v, sizeof v) && strcmp(v, "WareHouseView") == 0)
             {
                 uint8_t kind = 0; uint64_t id = 0;
                 mem::Read8(data, &kind);
                 mem::Read64(stageId, &id);
-                const char* cls = mem::RttiShort(root);
                 static Budget b;
                 if (b.Take(40))
                 {
-                    char s[64]; ReadSsRef(sel, s, sizeof s);
-                    LOG("[listener] %s root %llX (%s) actor %X kind 0x%02X stage %llu selector \"%s\"", v, U(root), cls ? cls : "?",
-                        static_cast<unsigned>(actor), kind, id, s);
                     const bool slot144 = kind >= 0x0C && kind != 0x10 && kind != 0x11 && kind != 0x14;
-                    if (!slot144)
-                    {
-                        LOG("[listener]   kind 0x%02X does not go to slot 144%s", kind, kind == 0x09 ? " (slot 145, wagon mode)" : "");
-                        DumpPacket("[listener]", data);
-                    }
+                    LOG("[listener] warehouse root %llX actor %X kind 0x%02X stage %llu%s", U(root), static_cast<unsigned>(actor), kind, id,
+                        slot144 ? "" : (kind == 0x09 ? " -> slot 145, wagon mode" : " -> not slot 144, dumped"));
+                    if (!slot144) DumpPacket("[listener]", data);
                 }
             }
             return static_cast<Fn6>(oListener)(root, actor, view, sel, stageId, data);
@@ -881,49 +899,54 @@ namespace psm::probe
         bool    g_unicode = true;
         bool    g_swallowed[256] = {};
 
+        bool Swallow(UINT vk, bool ctrl)
+        {
+            if (vk == VK_PAUSE) return true;
+            return ctrl && ((vk >= VK_F1 && vk <= VK_F24) || vk == VK_END);
+        }
+
         LRESULT CALLBACK ProbeWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         {
             if (m == WM_KEYDOWN || m == WM_SYSKEYDOWN || m == WM_KEYUP || m == WM_SYSKEYUP)
             {
                 const UINT vk = static_cast<UINT>(w & 0xFF);
                 const bool down = m == WM_KEYDOWN || m == WM_SYSKEYDOWN;
-                const bool chord = (GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_SHIFT) & 0x8000);
-                if (down && ((chord && vk >= '0' && vk <= '9') || vk == VK_PAUSE)) { g_swallowed[vk] = true; return 0; }
+                const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                if (down && Swallow(vk, ctrl)) { g_swallowed[vk] = true; return 0; }
                 if (!down && g_swallowed[vk]) { g_swallowed[vk] = false; return 0; }
             }
-            else if (m == WM_CHAR && (GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_SHIFT) & 0x8000))
-                return 0;
             return g_unicode ? CallWindowProcW(g_oldProc, h, m, w, l) : CallWindowProcA(g_oldProc, h, m, w, l);
         }
 
+        // The game's main window: class procedure +0x3E57F30 (R3E 5.1). The
+        // first session subclassed the splash window by taking the first one found.
         BOOL CALLBACK FindGameWindow(HWND h, LPARAM out)
         {
             DWORD pid = 0;
             GetWindowThreadProcessId(h, &pid);
-            if (pid != GetCurrentProcessId() || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
-            char cls[64] = {};
-            GetClassNameA(h, cls, sizeof cls);
-            if (strcmp(cls, "ConsoleWindowClass") == 0) return TRUE;
+            if (pid != GetCurrentProcessId() || GetWindow(h, GW_OWNER)) return TRUE;
+            if (static_cast<uintptr_t>(GetClassLongPtrW(h, GCLP_WNDPROC)) != Abs(kGameWndProc)) return TRUE;
             *reinterpret_cast<HWND*>(out) = h;
             return FALSE;
         }
 
         void SubclassGameWindow()
         {
-            if (g_hwnd) return;
+            if (g_hwnd && IsWindow(g_hwnd)) return;
+            g_hwnd = nullptr;
             HWND h = nullptr;
             EnumWindows(FindGameWindow, reinterpret_cast<LPARAM>(&h));
             if (!h) return;
             g_unicode = IsWindowUnicode(h) != 0;
             const LONG_PTR prev = g_unicode ? SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ProbeWndProc))
                                             : SetWindowLongPtrA(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ProbeWndProc));
-            if (!prev) { LOG_ERR("[keys] subclassing window %p failed (%lu)", static_cast<void*>(h), GetLastError()); g_hwnd = h; return; }
-            g_oldProc = reinterpret_cast<WNDPROC>(prev);
             g_hwnd = h;
+            if (!prev) { LOG_ERR("[keys] subclassing window %p failed (%lu)", static_cast<void*>(h), GetLastError()); return; }
+            g_oldProc = reinterpret_cast<WNDPROC>(prev);
             char cls[64] = {};
             GetClassNameA(h, cls, sizeof cls);
-            LOG("[keys] window %p class \"%s\" subclassed (%s, old proc +%llX)", static_cast<void*>(h), cls, g_unicode ? "unicode" : "ansi",
-                U(mem::Rva(reinterpret_cast<uintptr_t>(g_oldProc))));
+            LOG("[keys] game window %p class \"%s\" subclassed (%s, previous proc %llX)", static_cast<void*>(h), cls,
+                g_unicode ? "unicode" : "ansi", U(reinterpret_cast<uintptr_t>(g_oldProc)));
         }
 
         void RestoreGameWindow()
@@ -937,7 +960,7 @@ namespace psm::probe
 
         DWORD WINAPI Poller(LPVOID)
         {
-            bool keyWas[11] = {};   // '0'..'9', Pause
+            bool keyWas[11] = {};   // F1..F5, F12, End, ..., Pause
             DWORD nextBucketPoll = 0;
             while (!g_stop.load())
             {
@@ -956,30 +979,27 @@ namespace psm::probe
                 }
 
                 const bool front = GameInFront();
-                const bool chord = front && Down(VK_CONTROL) && Down(VK_SHIFT) && !Down(VK_MENU);
-                for (int k = 0; k <= 9; ++k)
+                const bool ctrl = front && Down(VK_CONTROL) && !Down(VK_MENU);
+                for (int k = 0; k < kChestCount; ++k)
                 {
-                    const bool d = chord && Down('0' + k);
+                    const bool d = ctrl && Down(VK_F1 + k);
                     if (d && !keyWas[k])
                     {
-                        if (k >= 1 && k <= kChestCount)
-                        {
-                            LOG("[probe] Ctrl+Shift+%d: %s", k, kChests[k - 1].label);
-                            g_pending = k - 1;
-                        }
-                        else if (k == 0)
-                        {
-                            LOG("[probe] Ctrl+Shift+0: panic close");
-                            g_pending = kActPanic;
-                        }
-                        else if (k == 9)
-                        {
-                            g_fidelity = !g_fidelity.load();
-                            LOG("[probe] Ctrl+Shift+9: 0x12 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
-                        }
+                        LOG("[probe] Ctrl+F%d: %s", k + 1, kChests[k].label);
+                        g_pending = k;
                     }
                     keyWas[k] = d;
                 }
+                const bool panic = ctrl && Down(VK_F12);
+                if (panic && !keyWas[5]) { LOG("[probe] Ctrl+F12: panic close"); g_pending = kActPanic; }
+                keyWas[5] = panic;
+                const bool fid = ctrl && Down(VK_END);
+                if (fid && !keyWas[6])
+                {
+                    g_fidelity = !g_fidelity.load();
+                    LOG("[probe] Ctrl+End: 0x12 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
+                }
+                keyWas[6] = fid;
 
                 const bool pause = front && Down(VK_PAUSE);
                 if (pause && !keyWas[10])
@@ -1062,10 +1082,10 @@ namespace psm::probe
         Hook(kMoveCheck, hkMoveCheck, &oMoveCheck);
         Hook(kMoveSend, hkMoveSend, &oMoveSend);
         Hook(kInputBlockSet, hkInputBlock, &oInputBlock);
+        Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
-        LOG("[probe] probe 2 running. Ctrl+Shift+1..5 open a chest from anywhere (Private Storage, Gatherables, Dresser, "
-            "Refrigerator, Collecting), Ctrl+Shift+9 toggles the extra 0x12/0x0D packets, Ctrl+Shift+0 is the panic close, "
-            "Pause dumps state.");
+        LOG("[probe] probe 2c running. Ctrl+F1..F5 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting; "
+            "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x0D packets (on); Pause dumps state.");
         return true;
     }
 

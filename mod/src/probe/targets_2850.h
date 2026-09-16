@@ -25,15 +25,17 @@ namespace psm::probe2850
         { "CloseEntryReset", 0xCAAC00, { 0x48, 0x89, 0x4C, 0x24, 0x08, 0x53, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8D, 0x59, 0x08, 0x48, 0x89 } },
         { "StageClose", 0x5F8090, { 0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41 } },
         { "InputBlockSet", 0xA1D3B0, { 0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x20, 0x44 } },
+        { "MoveDialogConfirm", 0xCB0190, { 0x48, 0x89, 0x5C, 0x24, 0x08, 0x4C, 0x89, 0x4C, 0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41 } },
     };
     enum : int { kHandler, kSetInventory, kMenuRequest, kModeSwitch, kFindPanelTop, kCanShow, kItemDetail, kCounting,
                  kEventPost, kRequestPhase, kWarehouseClose, kStageChartListener, kMoveCheck, kMoveSend, kCloseEntryReset,
-                 kStageClose, kInputBlockSet };
+                 kStageClose, kInputBlockSet, kMoveDialogConfirm };
     inline constexpr uint32_t kWarehouseVtable = 0x5548800;  // UIGamePlayControlRootWarehouse2
     inline constexpr uint32_t kEventWrapVtable = 0x549A2C0;  // UIEventWrap<...StageChartUIControlCommandData>
     inline constexpr uint32_t kEventMgrGlobal  = 0x6C3A7B0;  // UIEventManager; wrap at +0x9A8 (R3A)
     inline constexpr uint32_t kEventMgrWrapOff = 0x9A8;
     inline constexpr uint32_t kStageMgrVtable  = 0x54BA6F0;  // ClientSequencerStageManager, holds the InputBlock registry at +0x200
+    inline constexpr uint32_t kGameWndProc     = 0x3E57F30;  // class procedure of the game's main window, a jmp stub (R3E 5.1)
     inline constexpr uint32_t kInvMgrGlobal    = 0x6C2E2C8;  // InventoryInfoManager, RTTI slots 2 and 3 agree
     inline constexpr uint32_t kUiRootGlobal    = 0x6C2DA48;  // +0x98 phase manager, +0x68 windows (R3E)
     inline constexpr uint32_t kActorMgrGlobal  = 0x6C2D9F0;  // [[[g]+0x30]+0x58]+0xD8 controlled character (R3C)
