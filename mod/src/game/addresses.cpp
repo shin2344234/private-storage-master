@@ -224,6 +224,14 @@ namespace psm::addr
             else LOG_ERR("[addr] InventoryInfoManager slots 2 and 3 do not name one global");
         }
         c.actorManagerGlobal = Global("ActorManager", "48 8B 0D ?? ?? ?? ?? 48 8B 49 58 E8 ?? ?? ?? ?? 90 40 38 74 24 40 40 0F 94 C5 48 8D 05 ?? ?? ?? ??", 7);
+
+        // Deposit probe (R5). The entry, then the fourth argument read back from its
+        // home slot for the second actor lookup, as on 2.02.
+        const uintptr_t move = Unique("ClientMoveItem",
+            "48 8B C4 44 89 48 20 44 89 40 18 48 89 50 10 48 89 48 08 55 53 56 57 41 54 41 55 41 56 41 57 "
+            "48 8D A8 98 F6 FF FF 48 81 EC 28 0A 00 00 C5 F8 29 70 A8 C5 F8 29 78 98");
+        if (move && FindWithin(move, 0x100, "48 8B 49 30 E8 ?? ?? ?? ?? 90 44 8B 85 88 09 00 00")) c.clientMoveItem = move;
+        else if (move) LOG_ERR("[addr] ClientMoveItem at +%llX no longer looks up both actors the way it did on 2.02", R(move));
         return c.inventoryInfoRead && c.invMgrGlobal;
     }
 }

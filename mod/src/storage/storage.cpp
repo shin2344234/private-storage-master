@@ -329,6 +329,7 @@ namespace psm::storage
         // Once per frame, after the game's own mode switch.
         void Tick(uintptr_t pm)
         {
+            capacity::DepositProbeTick();
             const int act = g_pending.exchange(kActNone);
             if (act >= 0 && act < Settings::kStorages) { g_switchTo = -1; Request(pm, act); }
 
@@ -751,6 +752,13 @@ namespace psm::storage
                         else ToggleHideKeys();
                     }
                     keyWas[i] = down;
+                }
+                {
+                    // Deposit probe (R5): Ctrl+F11, only with DebugLog=1.
+                    static bool probeWas = false;
+                    const bool down = front && v.debugLog && mods == Settings::kModCtrl && KeyDown(VK_F11);
+                    if (down && !probeWas && !paused) { LOG_NOTE("[probe] Ctrl+F11"); capacity::RequestDepositProbe(); }
+                    probeWas = down;
                 }
                 for (int i = 0; i < Settings::kStorages; ++i)
                 {
