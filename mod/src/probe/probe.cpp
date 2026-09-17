@@ -16,11 +16,13 @@
 // the game's own StageChartUIControl event wrap and an owned close, per
 // private/research/R3-storage-system.md sections 5 and 6.
 //
-// Keys. While Ctrl is held the probe swallows every F key and End before the
-// game window sees them, so they reach nothing but the probe:
+// Keys. While Ctrl is held the probe swallows every F key, End and Delete
+// before the game window sees them (mods that read the keyboard themselves,
+// such as Crimson Route, still see them):
 //   Ctrl+F1..F8  open or close Private Storage, Gatherables, Dresser,
 //                Refrigerator, Collecting, Camp Straw, Bird Feed, Town Warehouse
-//   Ctrl+F12     panic: post 0x0F for whatever the controller holds, drop the
+//   Ctrl+F12     open or close the Kuku Pot (F9 is Glint Spotter's)
+//   Ctrl+Delete  panic: post 0x0F for whatever the controller holds, drop the
 //                IngameMenu phase and the input block
 //   Ctrl+End     toggle the 0x12, 0x14 and 0x0D packets a natural open also sends
 //                (on by default in this build)
@@ -167,7 +169,14 @@ namespace psm::probe
             { "Town Warehouse",
               "SetInventory(Character,Focus,True,Default;WareHouse,Focus,True;Wagon,NearWagon,False;PetAndVehicle,NearMercenary_Vehicle,False;Ship,Ship,False)",
               "SetWareHouseInventoryName(UI_WareHouse_Stroage)", nullptr, "2638607143", nullptr, "ShowPackageCampMoneyList()" },
+            // Kuku inventory (key 13, 240 slots, moves both ways with Character). The
+            // game shows it on its own KukuEnchantPanel at the Kuku pot NPC; here it goes
+            // in the warehouse screen. Title UI_Inventory_KukuItemList ("Kuku Pot Bag",
+            // lookup3 0xCEF81A05), icon from the Kuku NPC chart, straw modal text.
+            { "Kuku Pot", "SetInventory(Character,Focus,True;Kuku,Focus,True)",
+              "SetWareHouseInventoryName(UI_Inventory_KukuItemList)", "2520550823", "3472366085", "cd_icon_map_kukushop", nullptr },
         };
+        const int kChestKeys[] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F12 };
         constexpr int kChestCount = static_cast<int>(sizeof kChests / sizeof kChests[0]);
 
         // ------------------------------------------------------------ captured / shared state
@@ -1028,7 +1037,7 @@ namespace psm::probe
         bool Swallow(UINT vk, bool ctrl)
         {
             if (vk == VK_PAUSE) return true;
-            return ctrl && ((vk >= VK_F1 && vk <= VK_F24) || vk == VK_END);
+            return ctrl && ((vk >= VK_F1 && vk <= VK_F24) || vk == VK_END || vk == VK_DELETE);
         }
 
         LRESULT CALLBACK ProbeWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -1086,7 +1095,7 @@ namespace psm::probe
 
         DWORD WINAPI Poller(LPVOID)
         {
-            bool keyWas[11] = {};   // [0..7] Ctrl+F1..F8, [8] F12, [9] End, [10] Pause
+            bool keyWas[16] = {};   // [0..8] chest keys, [9] Delete, [10] End, [11] Pause
             DWORD nextBucketPoll = 0;
             while (!g_stop.load())
             {
@@ -1108,27 +1117,27 @@ namespace psm::probe
                 const bool ctrl = front && Down(VK_CONTROL) && !Down(VK_MENU);
                 for (int k = 0; k < kChestCount; ++k)
                 {
-                    const bool d = ctrl && Down(VK_F1 + k);
+                    const bool d = ctrl && Down(kChestKeys[k]);
                     if (d && !keyWas[k])
                     {
-                        LOG("[probe] Ctrl+F%d: %s", k + 1, kChests[k].label);
+                        LOG("[probe] Ctrl+F%d: %s", kChestKeys[k] - VK_F1 + 1, kChests[k].label);
                         g_pending = k;
                     }
                     keyWas[k] = d;
                 }
-                const bool panic = ctrl && Down(VK_F12);
-                if (panic && !keyWas[8]) { LOG("[probe] Ctrl+F12: panic close"); g_pending = kActPanic; }
-                keyWas[8] = panic;
+                const bool panic = ctrl && Down(VK_DELETE);
+                if (panic && !keyWas[9]) { LOG("[probe] Ctrl+Delete: panic close"); g_pending = kActPanic; }
+                keyWas[9] = panic;
                 const bool fid = ctrl && Down(VK_END);
-                if (fid && !keyWas[9])
+                if (fid && !keyWas[10])
                 {
                     g_fidelity = !g_fidelity.load();
                     LOG("[probe] Ctrl+End: 0x12, 0x14 and 0x0D packets %s", g_fidelity.load() ? "on" : "off");
                 }
-                keyWas[9] = fid;
+                keyWas[10] = fid;
 
                 const bool pause = front && Down(VK_PAUSE);
-                if (pause && !keyWas[10])
+                if (pause && !keyWas[11])
                 {
                     LOG("[probe] Pause");
                     DumpInventoryInfo();
@@ -1145,7 +1154,7 @@ namespace psm::probe
                     }
                     LOG("[probe] GameMain window %llX, event wrap %llX", U(GameMainWindow()), U(EventWrap()));
                 }
-                keyWas[10] = pause;
+                keyWas[11] = pause;
             }
             return 0;
         }
@@ -1213,9 +1222,9 @@ namespace psm::probe
         Hook(kInputBlockSet, hkInputBlock, &oInputBlock);
         Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
-        LOG("[probe] probe 2g running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
-            "Camp Straw, Bird Feed, Town Warehouse; "
-            "Ctrl+F12 panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
+        LOG("[probe] probe 2h running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
+            "Camp Straw, Bird Feed, Town Warehouse; Ctrl+F12 Kuku Pot; "
+            "Ctrl+Delete panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
         return true;
     }
 
