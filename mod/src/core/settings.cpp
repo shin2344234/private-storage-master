@@ -263,8 +263,12 @@ namespace psm::Settings
                         PadText(v.pad[i], b, sizeof b));
             fprintf(f,
                     "; Writes the size and contents count of every storage to the log.\n"
-                    "CapacityDumpKey=%s\n\n",
-                    KeyText(v.dumpKey, a, sizeof a));
+                    "CapacityDumpKey=%s\n\n"
+                    "; 1 keeps other keys from the game while a modifier your storage keys use is\n"
+                    "; held, so a slip onto Z while holding Ctrl does not fire a skill. Movement\n"
+                    "; (W, A, S, D, arrows), Space, Tab, Enter, Escape and Alt+F4 still go through.\n"
+                    "HideKeysWithModifier=%d\n\n",
+                    KeyText(v.dumpKey, a, sizeof a), v.hideKeysWithModifier ? 1 : 0);
             fprintf(f,
                     "; ------------------------------------------------------------------ sizes\n\n"
                     "; Size changes take effect the next time the game starts.\n\n"
@@ -313,6 +317,7 @@ namespace psm::Settings
                 if (_stricmp(key, "Enabled") == 0) out.enabled = atoi(val) != 0;
                 else if (_stricmp(key, "DebugLog") == 0) out.debugLog = atoi(val) != 0;
                 else if (_stricmp(key, "LeaveCapacityAlone") == 0) out.leaveCapacityAlone = atoi(val) != 0;
+                else if (_stricmp(key, "HideKeysWithModifier") == 0) out.hideKeysWithModifier = atoi(val) != 0;
                 // Test build 1 wrote these three before sizes went per storage.
                 else if (_stricmp(key, "HousingChests1000") == 0) { for (int i = 1; i <= 4; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "CampStorage1000") == 0) { for (int i = 5; i <= 8; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }

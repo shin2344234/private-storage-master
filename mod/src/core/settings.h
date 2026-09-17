@@ -45,6 +45,9 @@ namespace psm::Settings
         KeyBind key[kStorages];
         PadBind pad[kStorages];
         KeyBind dumpKey;
+        // While Ctrl (or whatever modifier a storage key uses) is held, keep every
+        // other key from the game too, so Ctrl+Z cannot fire the Z skill.
+        bool hideKeysWithModifier = true;
 
         bool leaveCapacityAlone = false;
         // Slots per storage; 0 keeps the game's size. Storage 0 (Private Storage)

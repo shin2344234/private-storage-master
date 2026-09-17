@@ -466,14 +466,46 @@ namespace psm::storage
             return -1;
         }
 
+        // A modifier combination some storage key (or the dump key) is bound to.
+        bool ModsInUse(uint8_t mods)
+        {
+            if (!mods) return false;
+            const Settings::Values& v = Settings::Get();
+            if (v.dumpKey.vk && v.dumpKey.mods == mods) return true;
+            for (int i = 0; i < Settings::kStorages; ++i)
+                if (v.key[i].vk && v.key[i].mods == mods) return true;
+            return false;
+        }
+
+        // Keys the game keeps while a storage modifier is held.
+        bool PassWithModifier(uint8_t vk, uint8_t mods)
+        {
+            switch (vk)
+            {
+            case 'W': case 'A': case 'S': case 'D':
+            case VK_UP: case VK_DOWN: case VK_LEFT: case VK_RIGHT:
+            case VK_SPACE: case VK_TAB: case VK_RETURN: case VK_ESCAPE:
+            case VK_SHIFT: case VK_CONTROL: case VK_MENU:
+            case VK_LSHIFT: case VK_RSHIFT: case VK_LCONTROL: case VK_RCONTROL: case VK_LMENU: case VK_RMENU:
+            case VK_LWIN: case VK_RWIN: case VK_CAPITAL: case VK_SNAPSHOT:
+                return true;
+            case VK_F4:
+                return (mods & Settings::kModAlt) != 0;   // Alt+F4 closes the game
+            default:
+                return false;
+            }
+        }
+
         LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         {
             if ((m == WM_KEYDOWN || m == WM_SYSKEYDOWN) && !Paused())
             {
                 const uint8_t vk = static_cast<uint8_t>(w & 0xFF);
-                const int b = Binding(vk, HeldMods());
+                const uint8_t mods = HeldMods();
+                const int b = Binding(vk, mods);
                 g_eatChar = false;
-                if (b != -1)
+                const bool lockout = b == -1 && Settings::Get().hideKeysWithModifier && ModsInUse(mods) && !PassWithModifier(vk, mods);
+                if (b != -1 || lockout)
                 {
                     // Only hidden here. The poller acts on it, reading the keyboard the way
                     // probe 2 did, so a message that never reaches this window still works.
