@@ -269,11 +269,14 @@ namespace psm::Settings
                     "; ------------------------------------------------------------------ capacity\n\n"
                     "; Capacity changes take effect the next time the game starts.\n\n"
                     "; 1 leaves every storage at the size the game (or another mod) gives it and\n"
-                    "; ignores the two settings below. Use it with JSON capacity mods.\n"
+                    "; ignores the settings below. Use it with JSON capacity mods.\n"
                     "LeaveCapacityAlone=%d\n\n"
                     "; 1 gives the Gatherables Chest, Wardrobe, Kuku Cooler and Collectibles Chest\n"
                     "; 1,000 slots each. 0 leaves them at 10.\n"
                     "HousingChests1000=%d\n\n"
+                    "; 1 gives Camp Straw, Bird Feed, the town warehouse (Camp Provisions) and the\n"
+                    "; Kuku Pot bag 1,000 slots each. 0 leaves them at the game's size.\n"
+                    "CampStorage1000=%d\n\n"
                     "; Total slots for Private Storage, purchased expansions included. 0 keeps the\n"
                     "; game's own size. The most is 1460.\n"
                     "PrivateStorageSlots=%d\n\n"
@@ -281,7 +284,7 @@ namespace psm::Settings
                     "; -1 has the mod read it from your save and use it from the next start, so\n"
                     "; the first start with a new PrivateStorageSlots can come out a little high.\n"
                     "PrivateStorageExpansions=%d\n",
-                    v.leaveCapacityAlone ? 1 : 0, v.housingChests1000 ? 1 : 0, v.privateStorageSlots, v.privateStorageExpansions);
+                    v.leaveCapacityAlone ? 1 : 0, v.housingChests1000 ? 1 : 0, v.campStorage1000 ? 1 : 0, v.privateStorageSlots, v.privateStorageExpansions);
             fclose(f);
         }
 
@@ -318,6 +321,7 @@ namespace psm::Settings
                 else if (_stricmp(key, "DebugLog") == 0) g_values.debugLog = atoi(val) != 0;
                 else if (_stricmp(key, "LeaveCapacityAlone") == 0) g_values.leaveCapacityAlone = atoi(val) != 0;
                 else if (_stricmp(key, "HousingChests1000") == 0) g_values.housingChests1000 = atoi(val) != 0;
+                else if (_stricmp(key, "CampStorage1000") == 0) g_values.campStorage1000 = atoi(val) != 0;
                 else if (_stricmp(key, "PrivateStorageSlots") == 0) g_values.privateStorageSlots = atoi(val);
                 else if (_stricmp(key, "PrivateStorageExpansions") == 0) g_values.privateStorageExpansions = atoi(val);
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
@@ -448,10 +452,10 @@ namespace psm::Settings
         char a[64], b[64];
         for (int i = 0; i < kStorages; ++i)
             LOG_NOTE("[settings] %-15s key %-12s pad %s", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b));
-        LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d HousingChests1000=%d PrivateStorageSlots=%d "
+        LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d HousingChests1000=%d CampStorage1000=%d PrivateStorageSlots=%d "
                  "PrivateStorageExpansions=%d",
                  v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a), v.leaveCapacityAlone ? 1 : 0, v.housingChests1000 ? 1 : 0,
-                 v.privateStorageSlots, v.privateStorageExpansions);
+                 v.campStorage1000 ? 1 : 0, v.privateStorageSlots, v.privateStorageExpansions);
     }
 
     const Values& Get() { return g_values; }

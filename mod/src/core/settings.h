@@ -40,6 +40,7 @@ namespace psm::Settings
 
         bool leaveCapacityAlone = false;
         bool housingChests1000 = true;
+        bool campStorage1000 = true;          // feed bin, bird feeder, town warehouse, Kuku Pot
         int  privateStorageSlots = 0;        // 0: the game's own capacity
         int  privateStorageExpansions = -1;  // -1: learn them from the save
         bool imported = false;               // settings came from PrivateStorageAnywhere.ini

@@ -27,7 +27,7 @@ namespace psm::capacity
         HANDLE g_thread = nullptr;
         void* oRead = nullptr;
 
-        enum Kind { kHousing, kPrivate };
+        enum Kind { kHousing, kCamp, kPrivate };
         struct Target
         {
             const char* name;
@@ -46,6 +46,10 @@ namespace psm::capacity
             {"Housing_Dresser", kHousing},
             {"Housing_Refrigerator", kHousing},
             {"Housing_Collecting", kHousing},
+            {"CampStraw", kCamp},
+            {"BirdFeed", kCamp},
+            {"WareHouse", kCamp},
+            {"Kuku", kCamp},
             {"CampWareHouse", kPrivate},
         };
         constexpr int kTargetCount = static_cast<int>(sizeof g_targets / sizeof g_targets[0]);
@@ -86,6 +90,16 @@ namespace psm::capacity
                 const int delta = m - d;
                 t.newDefault = m;
                 t.newMax = static_cast<uint16_t>(needSave ? (m + delta < kSlotArray ? m + delta : kSlotArray) : m);
+                return;
+            }
+            if (t.kind == kCamp)
+            {
+                // Default and max are equal in the data, so both move to 1,000 by the same amount.
+                constexpr int want = 1000;
+                if (want <= d) return;
+                const int delta = want - d;
+                t.newDefault = want;
+                t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
                 return;
             }
             const int total = Settings::Get().privateStorageSlots;
@@ -328,7 +342,7 @@ namespace psm::capacity
         {
             for (Target& t : g_targets)
             {
-                t.wanted = t.kind == kHousing ? v.housingChests1000 : v.privateStorageSlots > 0;
+                t.wanted = t.kind == kHousing ? v.housingChests1000 : t.kind == kCamp ? v.campStorage1000 : v.privateStorageSlots > 0;
                 any |= t.wanted;
             }
         }
@@ -351,7 +365,7 @@ namespace psm::capacity
         if (!any)
         {
             LOG_NOTE("[capacity] %s", v.leaveCapacityAlone ? "LeaveCapacityAlone=1: no storage size is changed"
-                                                            : "HousingChests1000=0 and PrivateStorageSlots=0: no storage size is changed");
+                                                            : "HousingChests1000=0, CampStorage1000=0 and PrivateStorageSlots=0: no storage size is changed");
             return;
         }
         if (!resolved || !g_addr.inventoryInfoRead)
