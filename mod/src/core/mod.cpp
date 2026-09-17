@@ -20,7 +20,7 @@ namespace
     DWORD WINAPI Worker(LPVOID)
     {
         psm::Settings::Load();
-        LOG_NOTE("[mod] %s %s (%s) for Crimson Desert %s, game image at 0x%p, %zu bytes", PSM_NAME, PSM_VERSION, PSM_BUILD, PSM_GAME,
+        LOG_NOTE("[mod] %s %s for Crimson Desert %s, game image at 0x%p, %zu bytes", PSM_NAME, PSM_VERSION, PSM_GAME,
                  reinterpret_cast<void*>(psm::mem::Game().base), psm::mem::Game().size);
         if (!psm::Settings::Get().enabled)
         {

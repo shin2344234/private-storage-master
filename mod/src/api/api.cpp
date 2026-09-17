@@ -75,7 +75,7 @@ PSM_EXPORT int PsmGetStatus(PsmStatus* out)
     out->imported = psm::Settings::Get().imported;
     out->restartNeeded = psm::Settings::RestartNeeded();
     out->learnedExpansions = psm::capacity::LearnedPrivateExtras();
-    snprintf(out->version, sizeof out->version, "%s (%s)", PSM_VERSION, PSM_BUILD);
+    snprintf(out->version, sizeof out->version, "%s", PSM_VERSION);
     snprintf(out->gameVersion, sizeof out->gameVersion, "%s", PSM_GAME);
     psm::Log::LastError(out->lastError, sizeof out->lastError);
     return 1;

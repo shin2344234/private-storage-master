@@ -2,14 +2,13 @@
 #
 #   powershell -ExecutionPolicy Bypass -File "<repo>\mod\package.ps1"
 #
-# PrivateStorageMaster-<version>.zip      manual install: plugin, ini, readme, licences
+# PrivateStorageMaster-<version>.zip      manual install: plugin, readme, licences
 # PrivateStorageMaster-<version>-DMM.zip  Definitive Mod Manager: the plugin alone,
 #                                  which is all DMM registers.
 #
-# Not yet checked for this plugin: whether every default in the ini matches the
-# one compiled in. Flight Freedom's DMM archive relies on that. The 1.6.0 ini
-# ships DebugLog=1, so compare LoadConfig in dllmain.cpp against the ini before
-# the first release, or put the ini in the DMM archive too.
+# Neither carries an ini. The plugin writes a fully commented one beside itself
+# the first time it runs, and it only brings bindings over from an old
+# PrivateStorageAnywhere.ini when no PrivateStorageMaster.ini exists yet.
 #
 # Run build.bat first; this script packages what is in dist and refuses if the
 # plugin there is older than the sources.
@@ -25,8 +24,7 @@ $version = (Select-String -Path (Join-Path $here 'src\version.h') -Pattern '#def
 if (-not $version) { throw 'no PSM_VERSION in src\version.h' }
 
 $asi = Join-Path $dist 'PrivateStorageMaster.asi'
-$ini = Join-Path $dist 'PrivateStorageMaster.ini'
-foreach ($f in @($asi, $ini)) { if (-not (Test-Path $f)) { throw "missing $f; run build.bat" } }
+if (-not (Test-Path $asi)) { throw "missing $asi; run build.bat" }
 
 $newestSource = Get-ChildItem (Join-Path $here 'src') -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($newestSource.LastWriteTime -gt (Get-Item $asi).LastWriteTime) {
@@ -43,18 +41,14 @@ if (-not $Unsigned) {
     Write-Host ("Signed by {0}" -f $sig.SignerCertificate.Subject)
 }
 
-# The 1.6.0 source carries no licence: Stevi2195 added MIT on 11 September 2026
-# and reverted it 26 seconds later, and the Nexus page for mod 388 says
-# modification needs his permission. No archive goes out until that is settled
-# in writing and LICENSE says what was agreed.
 if (-not (Test-Path (Join-Path $root 'LICENSE'))) {
-    throw "No LICENSE at the repo root. Settle the licence with Stevi2195 first (see CLAUDE.md, Licence and permission)."
+    throw "No LICENSE at the repo root. See CLAUDE.md, Licence and permission."
 }
 
 $staging = Join-Path $env:TEMP "psm-package-$version"
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $staging | Out-Null
-Copy-Item $asi, $ini $staging
+Copy-Item $asi $staging
 Copy-Item (Join-Path $here 'README.md') $staging
 Copy-Item (Join-Path $root 'LICENSE') $staging
 Copy-Item (Join-Path $root 'THIRD_PARTY_NOTICES.md') $staging
