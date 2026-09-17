@@ -259,6 +259,7 @@ namespace psm::capacity
         }
 
         uintptr_t RecordByName(const char* want);
+        int s_candidate = -1;
 
         // With PrivateStorageSlots set and PrivateStorageExpansions=-1, remember what
         // the save adds on top of the default so the next start can hit the total.
@@ -274,7 +275,11 @@ namespace psm::capacity
             uint16_t applied = 0;
             if (!rec || !mem::Read16(rec + 0x48, &applied)) return;
             const int extras = b.cap - applied;
-            if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) return;
+            if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) { s_candidate = -1; return; }
+            // While a save loads, storage exists before its expansions are added back,
+            // and one read there saw 0. Keep a count only once two reads agree.
+            if (extras != s_candidate) { s_candidate = extras; return; }
+            s_candidate = -1;
             const int total = Settings::Startup().slots[0];
             if (t.wanted)
                 LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "

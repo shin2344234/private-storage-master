@@ -97,6 +97,9 @@ PSM_API int         PsmGetSize(int storage, PsmSize* out);
 PSM_API void        PsmWriteDump(void);
 /* Ignore storage keys and combos for this long; call it every frame a menu has input. */
 PSM_API void        PsmPauseInput(uint32_t ms);
+/* A size that is not a setting (the Collectibles Chest), or 0. Added after
+ * interface 1 shipped to Master Looter, so look it up as optional. */
+PSM_API int         PsmFixedSlots(int storage);
 /* "Ctrl+F1", "LB+LS", "None". */
 PSM_API int         PsmKeyText(PsmKey key, char* out, int outLen);
 PSM_API int         PsmPadText(PsmPad pad, char* out, int outLen);

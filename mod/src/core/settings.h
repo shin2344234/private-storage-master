@@ -34,6 +34,9 @@ namespace psm::Settings
     // Order matches storage::kChests and the capacity targets.
     inline constexpr int kStorages = 9;
     inline constexpr int kMaxSlots = 1460;   // the slot array every storage has on 2.02
+    // Sizes that are not a setting. The Collectibles Chest holds one of each of the
+    // 958 collectibles in its data, so it is always given exactly that.
+    inline constexpr int kFixedSlots[kStorages] = {0, 0, 0, 0, 958, 0, 0, 0, 0};
 
     struct Values
     {

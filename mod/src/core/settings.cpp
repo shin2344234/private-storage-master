@@ -275,7 +275,13 @@ namespace psm::Settings
                     "; below the game's size does the same; the mod never makes storage smaller.\n"
                     "; PrivateStorageSlots is the total, purchased expansions included.\n",
                     v.leaveCapacityAlone ? 1 : 0, kMaxSlots);
-            for (int i = 0; i < kStorages; ++i) fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
+            for (int i = 0; i < kStorages; ++i)
+            {
+                if (kFixedSlots[i])
+                    fprintf(f, "; %sSlots is always %d: the chest holds one of each collectible.\n", kInfo[i].key, kFixedSlots[i]);
+                else
+                    fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
+            }
             fprintf(f,
                     "\n; How many slots your expansions and story progress add to Private Storage.\n"
                     "; -1 has the mod read it from your save and use it from the next start, so\n"
@@ -352,10 +358,12 @@ namespace psm::Settings
 
         void Clamp(Values& v)
         {
-            for (int& s : v.slots)
+            for (int i = 0; i < kStorages; ++i)
             {
+                int& s = v.slots[i];
                 if (s < 0) s = 0;
                 if (s > kMaxSlots) s = kMaxSlots;
+                if (kFixedSlots[i]) s = kFixedSlots[i];
             }
             if (v.privateStorageExpansions < -1) v.privateStorageExpansions = -1;
             if (v.privateStorageExpansions > kMaxSlots) v.privateStorageExpansions = kMaxSlots;

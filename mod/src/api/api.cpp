@@ -132,6 +132,11 @@ PSM_EXPORT int PsmGetSize(int storage, PsmSize* out)
 
 PSM_EXPORT void PsmWriteDump(void) { psm::capacity::RequestDump(); }
 
+PSM_EXPORT int PsmFixedSlots(int storage)
+{
+    return storage >= 0 && storage < PSM_STORAGES ? psm::Settings::kFixedSlots[storage] : 0;
+}
+
 PSM_EXPORT void PsmPauseInput(uint32_t ms) { psm::storage::PauseInput(ms > 2000 ? 2000 : ms); }
 
 PSM_EXPORT int PsmKeyText(PsmKey key, char* out, int outLen)
