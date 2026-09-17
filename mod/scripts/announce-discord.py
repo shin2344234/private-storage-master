@@ -28,7 +28,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 KEYFILE = os.path.join(HERE, "keys.local.env")
-PAGE_ID = ""   # the number in the mod page URL; set once the page exists
+PAGE_ID = "3521"   # the number in the mod page URL; set once the page exists
 NEXUS_FILES = "https://www.nexusmods.com/crimsondesert/mods/%s?tab=files" % PAGE_ID
 GITHUB_RELEASE = "https://github.com/shin2344234/private-storage-master/releases/tag/v%s"
 RELEASES_CHANNEL = "1547305058922668072"   # mod-releases

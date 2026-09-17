@@ -9,7 +9,7 @@ It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 2.0 by jkiip. It was written from scratch and contains no code from either; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-- Download and full description: [Nexus Mods](https://www.nexusmods.com/crimsondesert/mods/PAGE_ID)
+- Download and full description: [Nexus Mods](https://www.nexusmods.com/crimsondesert/mods/3521)
 - Install, keys, settings and building: [mod/README.md](mod/README.md)
 - For other plugins: [mod/include/psm_api.h](mod/include/psm_api.h) is the
   versioned C interface Master Looter's Storage tab uses.
