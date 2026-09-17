@@ -505,8 +505,21 @@ namespace psm::probe
 
             if (!g_remoteOpen.load()) return;
             ++g_remoteFrames;
-            uint8_t screen = 0;
+            uint8_t screen = 0, mode = 0;
             mem::Read8(pm + 0x29, &screen);
+            mem::Read8(pm + 0x28, &mode);
+            // Leaving the game with the screen open (mode 5 then 7 on quit, probe 2h
+            // session) tears down the stage manager and the UI. Forget the screen
+            // without posting or touching the old InputBlock registry.
+            if (mode != 4)
+            {
+                LOG("[remote] game mode is now %u with %s open; forgetting it", mode, g_remoteChest >= 0 ? kChests[g_remoteChest].label : "?");
+                g_blockMgr = 0;
+                g_blockKey = 0;
+                g_remoteOpen = false;
+                g_remoteChest = -1;
+                return;
+            }
             if (g_remoteFrames == 150)
             {
                 if (!g_saw0E.load()) { CloseRemote(pm, "rollback: the controller never received the 0x0E"); return; }
