@@ -1,0 +1,28 @@
+# Working notes, captures and anything written in Seth's voice. Never tracked.
+private/
+
+# The two upstream forks, cloned here with their PR branches. They are their
+# own repos with their own remotes and never part of this one.
+/upstream/
+
+# Third-party repos cloned for reference.
+/tools/
+
+__pycache__/
+*.pyc
+mod/build/
+mod/dist/
+
+# API keys.
+keys.local.env
+*.local.env
+.env
+.env.*
+!*.example
+
+# Editor settings.
+.vscode/
+.idea/
+
+# Game data extracted from the PAZ archives. Regenerate with the paz tools.
+extracted/
