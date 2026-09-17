@@ -258,20 +258,29 @@ namespace psm::capacity
             }
         }
 
+        uintptr_t RecordByName(const char* want);
+
         // With PrivateStorageSlots set and PrivateStorageExpansions=-1, remember what
         // the save adds on top of the default so the next start can hit the total.
         void LearnPrivateExtras()
         {
+            // Learned whether or not the size is changed: Master Looter's slider shows the
+            // game's own size as the default plus these, and needs them either way.
             const Target& t = g_targets[0];
-            if (!t.wanted || g_extrasFromIni || !t.seen.load()) return;
+            if (g_extrasFromIni) return;
             Bucket b{};
             if (!FindBucket("CampWareHouse", b) || b.cap <= 0) return;
-            const int applied = t.patches.load() ? t.newDefault : t.stockDefault;
+            const uintptr_t rec = RecordByName(t.name);
+            uint16_t applied = 0;
+            if (!rec || !mem::Read16(rec + 0x48, &applied)) return;
             const int extras = b.cap - applied;
             if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) return;
             const int total = Settings::Startup().slots[0];
-            LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "
-                     "which will size it to %d.", b.cap, applied, extras, total < kSlotArray ? total : kSlotArray);
+            if (t.wanted)
+                LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "
+                         "which will size it to %d.", b.cap, applied, extras, total < kSlotArray ? total : kSlotArray);
+            else
+                LOG("[capacity] Private Storage has %d slots, %d of them from expansions and story", b.cap, extras);
             WriteState(extras);
             g_privateExtras = extras;
         }
