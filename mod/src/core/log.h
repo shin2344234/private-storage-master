@@ -21,8 +21,14 @@ namespace psm::Log
     bool Claimed();
     void Shutdown();
     void Snapshot(std::vector<std::string>& out, int maxLines);
+
+    // DebugLog=0 keeps only notes and errors. Everything logged with LOG or
+    // LOG_OK is dropped before it is formatted.
+    void SetDebug(bool on);
+    bool Debug();
 }
 
-#define LOG(...)     ::psm::Log::Write("info ", __VA_ARGS__)
-#define LOG_OK(...)  ::psm::Log::Write("ok   ", __VA_ARGS__)
+#define LOG(...)     do { if (::psm::Log::Debug()) ::psm::Log::Write("info ", __VA_ARGS__); } while (0)
+#define LOG_OK(...)  do { if (::psm::Log::Debug()) ::psm::Log::Write("ok   ", __VA_ARGS__); } while (0)
+#define LOG_NOTE(...) ::psm::Log::Write("note ", __VA_ARGS__)
 #define LOG_ERR(...) ::psm::Log::Write("error", __VA_ARGS__)

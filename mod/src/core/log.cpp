@@ -1,6 +1,7 @@
 #include "core/log.h"
 
 #include <Windows.h>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <deque>
@@ -16,6 +17,10 @@ namespace psm::Log
     static FILE*                    g_file    = nullptr;
     static bool                     g_claimed = false;
     static constexpr size_t         kKeep     = 400;
+    static std::atomic<bool>        g_debug{true};
+
+    void SetDebug(bool on) { g_debug.store(on); }
+    bool Debug() { return g_debug.load(); }
 
     static std::string Stamp()
     {

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(PrivateStorageMaster LANGUAGES CXX C)
 
 # Private Storage Master: an ASI plugin for Crimson Desert that opens Private
-# Storage and the five housing chests from anywhere. Rebuilt from scratch for
+# Storage, the housing chests and the other camp and town storage from anywhere. Rebuilt from scratch for
 # 2.02.00; Private Storage Anywhere (Stevi2195) and the 2.00 community build
 # (jkiip) are references under upstream/, not sources.
 
@@ -32,9 +32,13 @@ add_library(PrivateStorageMaster SHARED
     src/core/mod.cpp
     src/core/log.cpp
     src/core/paths.cpp
+    src/core/settings.cpp
     src/game/mem.cpp
     src/game/farhook.cpp
-    src/probe/probe.cpp
+    src/game/addresses.cpp
+    src/storage/storage.cpp
+    src/storage/pad.cpp
+    src/storage/capacity.cpp
 )
 
 target_include_directories(PrivateStorageMaster PRIVATE src ${minhook_SOURCE_DIR}/src/hde)
