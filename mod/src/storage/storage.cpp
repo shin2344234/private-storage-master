@@ -248,7 +248,7 @@ namespace psm::storage
         {
             const Chest& c = kChests[chest];
             char why[128];
-            if (!GateOpen(pm, why, sizeof why)) { LOG("[storage] %s not opened, the game is not in free play (%s)", c.label, why); return false; }
+            if (!GateOpen(pm, why, sizeof why)) { LOG_NOTE("[storage] %s not opened, the game is not in free play (%s)", c.label, why); return false; }
             if (!EventWrap()) { LOG_ERR("[storage] %s not opened: the stage chart event wrap was not found", c.label); return false; }
             const uintptr_t mgr = StageManager();
             if (!mgr) { LOG_ERR("[storage] %s not opened: the player's stage manager was not found", c.label); return false; }
@@ -472,12 +472,8 @@ namespace psm::storage
                 g_eatChar = false;
                 if (b != -1)
                 {
-                    const bool repeat = (l & (1 << 30)) != 0;
-                    if (!repeat)
-                    {
-                        if (b == -2) capacity::RequestDump();
-                        else g_pending = b;
-                    }
+                    // Only hidden here. The poller acts on it, reading the keyboard the way
+                    // probe 2 did, so a message that never reaches this window still works.
                     g_swallowed[vk] = true;
                     g_eatChar = true;
                     return 0;
@@ -504,7 +500,7 @@ namespace psm::storage
             if (pid != GetCurrentProcessId() || GetWindow(h, GW_OWNER)) return TRUE;
             char cls[32] = {};
             GetClassNameA(h, cls, sizeof cls);
-            if (strcmp(cls, "Root") != 0) return TRUE;
+            if (strcmp(cls, "Root") != 0 || !IsWindowVisible(h)) return TRUE;
             *reinterpret_cast<HWND*>(out) = h;
             return FALSE;
         }
@@ -522,7 +518,7 @@ namespace psm::storage
             g_hwnd = h;
             if (!prev) { LOG_ERR("[keys] could not take the game window's keys (%lu); keyboard bindings do not work", GetLastError()); return; }
             g_oldProc = reinterpret_cast<WNDPROC>(prev);
-            LOG("[keys] reading keys from the game window %p", static_cast<void*>(h));
+            LOG_NOTE("[keys] hiding bound keys from the game window %p", static_cast<void*>(h));
         }
 
         void RestoreGameWindow()
@@ -544,9 +540,12 @@ namespace psm::storage
 
         constexpr DWORD kHoldCloseMs = 700;
 
+        bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+
         DWORD WINAPI Poller(LPVOID)
         {
             bool was[Settings::kStorages] = {};
+            bool keyWas[Settings::kStorages + 1] = {};
             DWORD since[Settings::kStorages] = {};
             bool held[Settings::kStorages] = {};
             DWORD nextWindowCheck = 0;
@@ -556,8 +555,30 @@ namespace psm::storage
                 const DWORD now = GetTickCount();
                 if (now >= nextWindowCheck) { SubclassGameWindow(); nextWindowCheck = now + 500; }
 
-                const uint16_t buttons = GameInFront() ? pad::Poll() : 0;
+                const bool front = GameInFront();
+                const uint16_t buttons = front ? pad::Poll() : 0;
                 const Settings::Values& v = Settings::Get();
+
+                uint8_t mods = 0;
+                if (front)
+                {
+                    if (KeyDown(VK_CONTROL)) mods |= Settings::kModCtrl;
+                    if (KeyDown(VK_SHIFT)) mods |= Settings::kModShift;
+                    if (KeyDown(VK_MENU)) mods |= Settings::kModAlt;
+                }
+                for (int i = 0; i <= Settings::kStorages; ++i)
+                {
+                    const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : v.dumpKey;
+                    const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk);
+                    if (down && !keyWas[i])
+                    {
+                        char t[32];
+                        LOG("[keys] %s", Settings::KeyText(k, t, sizeof t));
+                        if (i < Settings::kStorages) g_pending = i;
+                        else capacity::RequestDump();
+                    }
+                    keyWas[i] = down;
+                }
                 for (int i = 0; i < Settings::kStorages; ++i)
                 {
                     const Settings::PadBind& p = v.pad[i];
