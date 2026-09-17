@@ -11,4 +11,11 @@ namespace psm::storage
 {
     bool Start();
     void Stop();
+
+    bool Ready();                 // hooks in, keys live
+    bool KeyWindowFound();
+    int  OpenStorage();           // index of the storage the mod has open, or -1
+    // Master Looter calls this every frame its menu has the mouse, so rebinding
+    // Ctrl+F1 there does not also open Private Storage. It lapses on its own.
+    void PauseInput(unsigned ms);
 }

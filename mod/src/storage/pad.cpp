@@ -156,6 +156,13 @@ namespace psm::pad
 
     uint16_t Last() { return g_last.load(); }
 
+    int Slot()
+    {
+        for (int i = 0; i < XUSER_MAX_COUNT; ++i)
+            if (g_present[i]) return i;
+        return -1;
+    }
+
     void HideBUntilReleased() { g_hideB = true; }
 
     void Shutdown()

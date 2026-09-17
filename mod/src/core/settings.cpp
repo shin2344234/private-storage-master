@@ -1,6 +1,8 @@
 #include "core/settings.h"
 
 #include <Windows.h>
+#include <atomic>
+#include <string>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -14,26 +16,25 @@ namespace psm::Settings
 {
     namespace
     {
-        Values g_values;
-
         struct StorageInfo
         {
             const char* key;        // ini prefix
+            const char* label;      // in-game name
             const char* oldKey;     // PrivateStorageAnywhere.ini prefix, or nullptr
             const char* comment;    // what it is, for the written ini
             const char* defKey;
             const char* defPad;
         };
         const StorageInfo kInfo[kStorages] = {
-            {"PrivateStorage", "Private", "Private Storage, the camp storage box", "Ctrl+F1", "LB+LS"},
-            {"Gatherables", "Gatherables", "Gatherables Chest (housing)", "Ctrl+F2", "LB+RS"},
-            {"Dresser", "Dresser", "Wardrobe (housing)", "Ctrl+F3", ""},
-            {"Refrigerator", "Refrigerator", "Kuku Cooler (housing)", "Ctrl+F4", ""},
-            {"Collecting", "Collecting", "Collectibles Chest (housing)", "Ctrl+F5", ""},
-            {"CampStraw", nullptr, "Camp Straw, the camp feed bin", "Ctrl+F6", ""},
-            {"BirdFeed", nullptr, "Bird Feed, the camp bird feeder", "Ctrl+F7", ""},
-            {"TownWarehouse", nullptr, "Town Warehouse, the packaged trade goods kept at warehouse NPCs", "Ctrl+F8", ""},
-            {"AbyssGear", nullptr, "Abyss gear storage, the Kuku Pot bag", "Ctrl+F9", ""},
+            {"PrivateStorage", "Private Storage", "Private", "Private Storage, the camp storage box", "Ctrl+F1", "LB+LS"},
+            {"Gatherables", "Gatherables Chest", "Gatherables", "Gatherables Chest (housing)", "Ctrl+F2", "LB+RS"},
+            {"Dresser", "Wardrobe", "Dresser", "Wardrobe (housing)", "Ctrl+F3", ""},
+            {"Refrigerator", "Kuku Cooler", "Refrigerator", "Kuku Cooler (housing)", "Ctrl+F4", ""},
+            {"Collecting", "Collectibles Chest", "Collecting", "Collectibles Chest (housing)", "Ctrl+F5", ""},
+            {"CampStraw", "Camp Straw", nullptr, "Camp Straw, the camp feed bin", "Ctrl+F6", ""},
+            {"BirdFeed", "Bird Feed", nullptr, "Bird Feed, the camp bird feeder", "Ctrl+F7", ""},
+            {"TownWarehouse", "Camp Provisions", nullptr, "Camp Provisions, the town warehouse for packaged trade goods", "Ctrl+F8", ""},
+            {"AbyssGear", "Abyss Gear Storage", nullptr, "Abyss gear storage, the Kuku Pot bag", "Ctrl+F9", ""},
         };
 
         void Trim(char* s)
@@ -156,18 +157,18 @@ namespace psm::Settings
         // ---------------------------------------------------------------- import
         uint8_t Hex8(const char* s) { return static_cast<uint8_t>(strtoul(s, nullptr, 16) & 0xFF); }
 
-        void ImportOld(const std::wstring& path)
+        void ImportOld(Values& out)
         {
+            const std::string file = Paths::FileUtf8(L"PrivateStorageAnywhere.ini");
             char v[64];
             const auto get = [&](const char* key, const char* def) {
-                GetPrivateProfileStringA("Settings", key, def, v, sizeof v, Paths::FileUtf8(L"PrivateStorageAnywhere.ini").c_str());
+                GetPrivateProfileStringA("Settings", key, def, v, sizeof v, file.c_str());
                 Trim(v);
                 return v;
             };
-            (void)path;
-            g_values.enabled = atoi(get("Enabled", "1")) != 0;
-            g_values.privateStorageSlots = atoi(get("PrivateStorageSlots", "0"));
-            g_values.privateStorageExpansions = atoi(get("PrivateStorageExpansions", "-1"));
+            out.enabled = atoi(get("Enabled", "1")) != 0;
+            out.slots[0] = atoi(get("PrivateStorageSlots", "0"));
+            out.privateStorageExpansions = atoi(get("PrivateStorageExpansions", "-1"));
 
             for (int i = 0; i < kStorages; ++i)
             {
@@ -192,7 +193,7 @@ namespace psm::Settings
                 else if (vk)
                     LOG_NOTE("[settings] import: %sHotkey=%02X is a mouse or modifier key, which this mod does not bind; %s keeps no key",
                              s.oldKey, vk, s.key);
-                g_values.key[i] = kb;
+                out.key[i] = kb;
 
                 snprintf(name, sizeof name, "%sControllerButton", s.oldKey);
                 const uint16_t button = static_cast<uint16_t>(strtoul(get(name, "0000"), nullptr, 16));
@@ -205,32 +206,33 @@ namespace psm::Settings
                     pb.press = static_cast<uint16_t>(button & (~button + 1));
                     pb.hold = static_cast<uint16_t>(modifier & ~pb.press);
                 }
-                g_values.pad[i] = pb;
+                out.pad[i] = pb;
             }
             char symbol[16];
-            GetPrivateProfileStringA("Settings", "SymbolHotkey", "00", symbol, sizeof symbol, Paths::FileUtf8(L"PrivateStorageAnywhere.ini").c_str());
+            GetPrivateProfileStringA("Settings", "SymbolHotkey", "00", symbol, sizeof symbol, file.c_str());
             if (Hex8(symbol))
                 LOG_NOTE("[settings] import: Symbol storage has no binding here. The game has no way to put anything in it.");
-            g_values.imported = true;
+            out.imported = true;
         }
 
         // ---------------------------------------------------------------- writing
-        void WriteIni(const std::wstring& path)
+        bool WriteIni(const Values& v)
         {
+            const std::wstring path = Paths::File(PSM_INI);
             FILE* f = nullptr;
             if (_wfopen_s(&f, path.c_str(), L"w") != 0 || !f)
             {
                 LOG_ERR("[settings] could not write %s", Paths::FileUtf8(PSM_INI).c_str());
-                return;
+                return false;
             }
-            const Values& v = g_values;
             char a[64], b[64];
             fprintf(f, "[PrivateStorageMaster]\n\n");
             if (v.imported)
                 fprintf(f, "; Written from your PrivateStorageAnywhere.ini the first time this mod ran.\n; That file is left as it was and is not read again.\n\n");
             fprintf(f,
+                    "; Master Looter's Storage tab edits this file while the game runs.\n\n"
                     "; ------------------------------------------------------------------ general\n\n"
-                    "; 1 turns the mod on. 0 loads it and does nothing.\n"
+                    "; 1 turns the mod on. 0 loads it and does nothing. Takes effect next start.\n"
                     "Enabled=%d\n\n"
                     "; 1 writes everything the mod does to PrivateStorageMaster.log. 0 writes only\n"
                     "; the startup summary, errors and the capacity dump. Turn it on for a bug report.\n"
@@ -257,52 +259,37 @@ namespace psm::Settings
                     "; A PlayStation pad works through Steam Input or DS4Windows. Holding a combo\n"
                     "; for most of a second closes the open storage.\n\n");
             for (int i = 0; i < kStorages; ++i)
-            {
                 fprintf(f, "; %s\n%sKey=%s\n%sPad=%s\n\n", kInfo[i].comment, kInfo[i].key, KeyText(v.key[i], a, sizeof a), kInfo[i].key,
                         PadText(v.pad[i], b, sizeof b));
-            }
             fprintf(f,
                     "; Writes the size and contents count of every storage to the log.\n"
                     "CapacityDumpKey=%s\n\n",
                     KeyText(v.dumpKey, a, sizeof a));
             fprintf(f,
-                    "; ------------------------------------------------------------------ capacity\n\n"
-                    "; Capacity changes take effect the next time the game starts.\n\n"
+                    "; ------------------------------------------------------------------ sizes\n\n"
+                    "; Size changes take effect the next time the game starts.\n\n"
                     "; 1 leaves every storage at the size the game (or another mod) gives it and\n"
-                    "; ignores the settings below. Use it with JSON capacity mods.\n"
+                    "; ignores the sizes below. Use it with JSON capacity mods.\n"
                     "LeaveCapacityAlone=%d\n\n"
-                    "; 1 gives the Gatherables Chest, Wardrobe, Kuku Cooler and Collectibles Chest\n"
-                    "; 1,000 slots each. 0 leaves them at 10.\n"
-                    "HousingChests1000=%d\n\n"
-                    "; 1 gives Camp Straw, Bird Feed, the town warehouse (Camp Provisions) and the\n"
-                    "; Kuku Pot bag 1,000 slots each. 0 leaves them at the game's size.\n"
-                    "CampStorage1000=%d\n\n"
-                    "; Total slots for Private Storage, purchased expansions included. 0 keeps the\n"
-                    "; game's own size. The most is 1460.\n"
-                    "PrivateStorageSlots=%d\n\n"
-                    "; How many slots your expansions and story progress add to Private Storage.\n"
+                    "; Slots for each storage, up to %d. 0 keeps the game's size, and a number\n"
+                    "; below the game's size does the same; the mod never makes storage smaller.\n"
+                    "; PrivateStorageSlots is the total, purchased expansions included.\n",
+                    v.leaveCapacityAlone ? 1 : 0, kMaxSlots);
+            for (int i = 0; i < kStorages; ++i) fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
+            fprintf(f,
+                    "\n; How many slots your expansions and story progress add to Private Storage.\n"
                     "; -1 has the mod read it from your save and use it from the next start, so\n"
                     "; the first start with a new PrivateStorageSlots can come out a little high.\n"
                     "PrivateStorageExpansions=%d\n",
-                    v.leaveCapacityAlone ? 1 : 0, v.housingChests1000 ? 1 : 0, v.campStorage1000 ? 1 : 0, v.privateStorageSlots, v.privateStorageExpansions);
+                    v.privateStorageExpansions);
             fclose(f);
+            return true;
         }
 
-        void Defaults()
-        {
-            g_values = Values{};
-            for (int i = 0; i < kStorages; ++i)
-            {
-                ParseKey(kInfo[i].defKey, g_values.key[i]);
-                ParsePad(kInfo[i].defPad, g_values.pad[i]);
-            }
-            ParseKey("Ctrl+F12", g_values.dumpKey);
-        }
-
-        void ReadIni(const std::wstring& path)
+        void ReadIni(Values& out)
         {
             FILE* f = nullptr;
-            if (_wfopen_s(&f, path.c_str(), L"r") != 0 || !f) return;
+            if (_wfopen_s(&f, Paths::File(PSM_INI).c_str(), L"r") != 0 || !f) return;
             char line[512];
             while (fgets(line, sizeof line, f))
             {
@@ -317,17 +304,17 @@ namespace psm::Settings
                 Trim(val);
 
                 bool known = true;
-                if (_stricmp(key, "Enabled") == 0) g_values.enabled = atoi(val) != 0;
-                else if (_stricmp(key, "DebugLog") == 0) g_values.debugLog = atoi(val) != 0;
-                else if (_stricmp(key, "LeaveCapacityAlone") == 0) g_values.leaveCapacityAlone = atoi(val) != 0;
-                else if (_stricmp(key, "HousingChests1000") == 0) g_values.housingChests1000 = atoi(val) != 0;
-                else if (_stricmp(key, "CampStorage1000") == 0) g_values.campStorage1000 = atoi(val) != 0;
-                else if (_stricmp(key, "PrivateStorageSlots") == 0) g_values.privateStorageSlots = atoi(val);
-                else if (_stricmp(key, "PrivateStorageExpansions") == 0) g_values.privateStorageExpansions = atoi(val);
+                if (_stricmp(key, "Enabled") == 0) out.enabled = atoi(val) != 0;
+                else if (_stricmp(key, "DebugLog") == 0) out.debugLog = atoi(val) != 0;
+                else if (_stricmp(key, "LeaveCapacityAlone") == 0) out.leaveCapacityAlone = atoi(val) != 0;
+                // Test build 1 wrote these three before sizes went per storage.
+                else if (_stricmp(key, "HousingChests1000") == 0) { for (int i = 1; i <= 4; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
+                else if (_stricmp(key, "CampStorage1000") == 0) { for (int i = 5; i <= 8; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
+                else if (_stricmp(key, "PrivateStorageExpansions") == 0) out.privateStorageExpansions = atoi(val);
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
                     KeyBind k;
-                    if (ParseKey(val, k)) g_values.dumpKey = k;
+                    if (ParseKey(val, k)) out.dumpKey = k;
                     else LOG_ERR("[settings] CapacityDumpKey=%s is not a key this mod can bind; keeping the default", val);
                 }
                 else
@@ -341,15 +328,20 @@ namespace psm::Settings
                         {
                             known = true;
                             KeyBind k;
-                            if (ParseKey(val, k)) g_values.key[i] = k;
+                            if (ParseKey(val, k)) out.key[i] = k;
                             else LOG_ERR("[settings] %s=%s is not a key this mod can bind; keeping the default", key, val);
                         }
                         else if (_stricmp(key + n, "Pad") == 0)
                         {
                             known = true;
                             PadBind p;
-                            if (ParsePad(val, p)) g_values.pad[i] = p;
+                            if (ParsePad(val, p)) out.pad[i] = p;
                             else LOG_ERR("[settings] %s=%s is not a controller combo; keeping the default", key, val);
+                        }
+                        else if (_stricmp(key + n, "Slots") == 0)
+                        {
+                            known = true;
+                            out.slots[i] = atoi(val);
                         }
                     }
                 }
@@ -358,38 +350,71 @@ namespace psm::Settings
             fclose(f);
         }
 
+        void Clamp(Values& v)
+        {
+            for (int& s : v.slots)
+            {
+                if (s < 0) s = 0;
+                if (s > kMaxSlots) s = kMaxSlots;
+            }
+            if (v.privateStorageExpansions < -1) v.privateStorageExpansions = -1;
+            if (v.privateStorageExpansions > kMaxSlots) v.privateStorageExpansions = kMaxSlots;
+        }
+
         // Two bindings on the same key or combo: the later one is turned off.
-        void Deduplicate()
+        void Deduplicate(Values& v)
         {
             char t[64];
             for (int i = 0; i < kStorages; ++i)
                 for (int j = 0; j < i; ++j)
                 {
-                    if (g_values.key[i].vk && g_values.key[i].vk == g_values.key[j].vk && g_values.key[i].mods == g_values.key[j].mods)
+                    if (v.key[i].vk && v.key[i].vk == v.key[j].vk && v.key[i].mods == v.key[j].mods)
                     {
                         LOG_ERR("[settings] %sKey and %sKey are both %s; %sKey is turned off", kInfo[j].key, kInfo[i].key,
-                                KeyText(g_values.key[i], t, sizeof t), kInfo[i].key);
-                        g_values.key[i] = KeyBind{};
+                                KeyText(v.key[i], t, sizeof t), kInfo[i].key);
+                        v.key[i] = KeyBind{};
                     }
-                    if (g_values.pad[i].press && g_values.pad[i].press == g_values.pad[j].press && g_values.pad[i].hold == g_values.pad[j].hold)
+                    if (v.pad[i].press && v.pad[i].press == v.pad[j].press && v.pad[i].hold == v.pad[j].hold)
                     {
                         LOG_ERR("[settings] %sPad and %sPad are both %s; %sPad is turned off", kInfo[j].key, kInfo[i].key,
-                                PadText(g_values.pad[i], t, sizeof t), kInfo[i].key);
-                        g_values.pad[i] = PadBind{};
+                                PadText(v.pad[i], t, sizeof t), kInfo[i].key);
+                        v.pad[i] = PadBind{};
                     }
                 }
-            const KeyBind& d = g_values.dumpKey;
             for (int i = 0; i < kStorages; ++i)
-                if (d.vk && d.vk == g_values.key[i].vk && d.mods == g_values.key[i].mods)
+                if (v.dumpKey.vk && v.dumpKey.vk == v.key[i].vk && v.dumpKey.mods == v.key[i].mods)
                 {
                     LOG_ERR("[settings] CapacityDumpKey is the same as %sKey; the dump key is turned off", kInfo[i].key);
-                    g_values.dumpKey = KeyBind{};
+                    v.dumpKey = KeyBind{};
                     break;
                 }
+        }
+
+        // Published copies are never freed: a reader may still hold the old one,
+        // and a copy is a few hundred bytes changed a handful of times a session.
+        std::atomic<const Values*> g_cur{nullptr};
+        const Values* g_startup = nullptr;
+        SRWLOCK g_writeLock = SRWLOCK_INIT;
+
+        void Publish(const Values& v)
+        {
+            g_cur.store(new Values(v));
+            Log::SetDebug(v.debugLog);
+        }
+
+        void LogValues(const Values& v)
+        {
+            char a[64], b[64];
+            for (int i = 0; i < kStorages; ++i)
+                LOG_NOTE("[settings] %-15s key %-12s pad %-10s slots %d", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b),
+                         v.slots[i]);
+            LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d PrivateStorageExpansions=%d", v.enabled ? 1 : 0,
+                     v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a), v.leaveCapacityAlone ? 1 : 0, v.privateStorageExpansions);
         }
     }
 
     const char* StorageKeyName(int storage) { return storage >= 0 && storage < kStorages ? kInfo[storage].key : "?"; }
+    const char* StorageLabel(int storage) { return storage >= 0 && storage < kStorages ? kInfo[storage].label : "?"; }
 
     const char* KeyText(const KeyBind& k, char* out, size_t cap)
     {
@@ -428,35 +453,104 @@ namespace psm::Settings
         return out;
     }
 
+    Values Defaults()
+    {
+        Values v;
+        for (int i = 0; i < kStorages; ++i)
+        {
+            ParseKey(kInfo[i].defKey, v.key[i]);
+            ParsePad(kInfo[i].defPad, v.pad[i]);
+        }
+        ParseKey("Ctrl+F12", v.dumpKey);
+        return v;
+    }
+
     void Load()
     {
-        Defaults();
-        const std::wstring path = Paths::File(PSM_INI);
-        const std::wstring old = Paths::File(L"PrivateStorageAnywhere.ini");
-        const bool have = GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+        Values v = Defaults();
+        const bool have = GetFileAttributesW(Paths::File(PSM_INI).c_str()) != INVALID_FILE_ATTRIBUTES;
         if (have)
-            ReadIni(path);
-        else if (GetFileAttributesW(old.c_str()) != INVALID_FILE_ATTRIBUTES)
-            ImportOld(old);
-        Deduplicate();
-        if (!have) WriteIni(path);
+            ReadIni(v);
+        else if (GetFileAttributesW(Paths::File(L"PrivateStorageAnywhere.ini").c_str()) != INVALID_FILE_ATTRIBUTES)
+            ImportOld(v);
+        Clamp(v);
+        Deduplicate(v);
+        if (!have) WriteIni(v);
+        g_startup = new Values(v);
+        Publish(v);
 
-        Log::SetDebug(g_values.debugLog);
-        if (g_values.imported)
+        if (v.imported)
             LOG_NOTE("[settings] no %s yet, so the bindings and capacity settings were taken from PrivateStorageAnywhere.ini and written to it",
                      Paths::FileUtf8(PSM_INI).c_str());
         else if (!have)
             LOG_NOTE("[settings] wrote a default %s", Paths::FileUtf8(PSM_INI).c_str());
-
-        const Values& v = g_values;
-        char a[64], b[64];
-        for (int i = 0; i < kStorages; ++i)
-            LOG_NOTE("[settings] %-15s key %-12s pad %s", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b));
-        LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d HousingChests1000=%d CampStorage1000=%d PrivateStorageSlots=%d "
-                 "PrivateStorageExpansions=%d",
-                 v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a), v.leaveCapacityAlone ? 1 : 0, v.housingChests1000 ? 1 : 0,
-                 v.campStorage1000 ? 1 : 0, v.privateStorageSlots, v.privateStorageExpansions);
+        LogValues(v);
     }
 
-    const Values& Get() { return g_values; }
+    const Values& Get()
+    {
+        static const Values kEmpty{};
+        const Values* v = g_cur.load();
+        return v ? *v : kEmpty;
+    }
+
+    const Values& Startup() { return g_startup ? *g_startup : Get(); }
+
+    bool Apply(const Values& in, char* why, size_t whyLen)
+    {
+        if (why && whyLen) why[0] = 0;
+        Values v = in;
+        for (int i = 0; i < kStorages; ++i)
+        {
+            if (v.key[i].vk && !Bindable(v.key[i].vk))
+            {
+                if (why) snprintf(why, whyLen, "%s: mouse buttons and modifier keys cannot be bound", kInfo[i].label);
+                return false;
+            }
+            if (v.pad[i].press && (v.pad[i].hold & v.pad[i].press))
+            {
+                if (why) snprintf(why, whyLen, "%s: the pressed button is also a held one", kInfo[i].label);
+                return false;
+            }
+        }
+        if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
+        {
+            if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
+            return false;
+        }
+        Clamp(v);
+        Deduplicate(v);
+        AcquireSRWLockExclusive(&g_writeLock);
+        v.imported = Get().imported;
+        Publish(v);
+        const bool wrote = WriteIni(v);
+        ReleaseSRWLockExclusive(&g_writeLock);
+        LOG("[settings] changed in game%s", wrote ? " and saved" : ", but the ini could not be written");
+        if (!wrote && why) snprintf(why, whyLen, "applied, but %s could not be written", Paths::FileUtf8(PSM_INI).c_str());
+        return wrote;
+    }
+
+    void Reload()
+    {
+        Values v = Defaults();
+        ReadIni(v);
+        Clamp(v);
+        Deduplicate(v);
+        AcquireSRWLockExclusive(&g_writeLock);
+        Publish(v);
+        ReleaseSRWLockExclusive(&g_writeLock);
+        LOG_NOTE("[settings] read %s again", Paths::FileUtf8(PSM_INI).c_str());
+        LogValues(v);
+    }
+
+    bool RestartNeeded()
+    {
+        const Values& a = Get();
+        const Values& b = Startup();
+        if (a.enabled != b.enabled || a.leaveCapacityAlone != b.leaveCapacityAlone || a.privateStorageExpansions != b.privateStorageExpansions)
+            return true;
+        for (int i = 0; i < kStorages; ++i)
+            if (a.slots[i] != b.slots[i]) return true;
+        return false;
+    }
 }

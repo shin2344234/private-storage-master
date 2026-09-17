@@ -11,6 +11,7 @@ namespace psm::pad
     bool Init();       // loads XInput and installs the import filter
     uint16_t Poll();   // buttons held on any pad, OR-ed together; poller thread only
     uint16_t Last();   // what the last Poll saw, from any thread
+    int Slot();        // first XInput slot with a pad, or -1
     void HideBUntilReleased();
     void Shutdown();
 }

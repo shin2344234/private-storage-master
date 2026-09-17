@@ -25,6 +25,8 @@ namespace psm::Log
     // DebugLog=0 keeps only notes and errors. Everything logged with LOG or
     // LOG_OK is dropped before it is formatted.
     void SetDebug(bool on);
+    // The text of the last error logged, "" when none.
+    void LastError(char* out, size_t cap);
     bool Debug();
 }
 

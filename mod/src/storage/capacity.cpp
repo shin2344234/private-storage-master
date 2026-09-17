@@ -27,11 +27,10 @@ namespace psm::capacity
         HANDLE g_thread = nullptr;
         void* oRead = nullptr;
 
-        enum Kind { kHousing, kCamp, kPrivate };
         struct Target
         {
             const char* name;
-            Kind kind;
+            int storage;          // index into Settings slots
             bool wanted = false;
             // Filled by the first read of the record, on a loader thread.
             std::atomic<bool> seen{false};
@@ -42,15 +41,15 @@ namespace psm::capacity
             int logged = 0;
         };
         Target g_targets[] = {
-            {"Housing_GatheredMaterials", kHousing},
-            {"Housing_Dresser", kHousing},
-            {"Housing_Refrigerator", kHousing},
-            {"Housing_Collecting", kHousing},
-            {"CampStraw", kCamp},
-            {"BirdFeed", kCamp},
-            {"WareHouse", kCamp},
-            {"Kuku", kCamp},
-            {"CampWareHouse", kPrivate},
+            {"CampWareHouse", 0},
+            {"Housing_GatheredMaterials", 1},
+            {"Housing_Dresser", 2},
+            {"Housing_Refrigerator", 3},
+            {"Housing_Collecting", 4},
+            {"CampStraw", 5},
+            {"BirdFeed", 6},
+            {"WareHouse", 7},
+            {"Kuku", 8},
         };
         constexpr int kTargetCount = static_cast<int>(sizeof g_targets / sizeof g_targets[0]);
 
@@ -84,31 +83,18 @@ namespace psm::capacity
             t.newDefault = d;
             t.newMax = m;
             if (!t.wanted) return;
-            if (t.kind == kHousing)
-            {
-                if (m <= d) return;
-                const int delta = m - d;
-                t.newDefault = m;
-                t.newMax = static_cast<uint16_t>(needSave ? (m + delta < kSlotArray ? m + delta : kSlotArray) : m);
-                return;
-            }
-            if (t.kind == kCamp)
-            {
-                // Default and max are equal in the data, so both move to 1,000 by the same amount.
-                constexpr int want = 1000;
-                if (want <= d) return;
-                const int delta = want - d;
-                t.newDefault = want;
-                t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
-                return;
-            }
-            const int total = Settings::Get().privateStorageSlots;
-            int want = total - g_privateExtras;
-            if (want > kSlotArray - g_privateExtras) want = kSlotArray - g_privateExtras;
+            const int slots = Settings::Startup().slots[t.storage];
+            // Private Storage's setting is a total that counts expansions and story slots.
+            int want = t.storage == 0 ? slots - g_privateExtras : slots;
+            const int ceiling = t.storage == 0 ? kSlotArray - g_privateExtras : kSlotArray;
+            if (want > ceiling) want = ceiling;
             if (want <= d) return;
             const int delta = want - d;
             t.newDefault = static_cast<uint16_t>(want);
-            t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
+            // Housing chests save no slot count, so their max only has to hold the new
+            // default. The rest move max with the default so saved counts stay put.
+            if (!needSave) t.newMax = static_cast<uint16_t>(m > want ? m : want);
+            else t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
         }
 
         bool RecordName(uintptr_t rec, char* out, size_t cap)
@@ -276,14 +262,14 @@ namespace psm::capacity
         // the save adds on top of the default so the next start can hit the total.
         void LearnPrivateExtras()
         {
-            const Target& t = g_targets[kTargetCount - 1];
+            const Target& t = g_targets[0];
             if (!t.wanted || g_extrasFromIni || !t.seen.load()) return;
             Bucket b{};
             if (!FindBucket("CampWareHouse", b) || b.cap <= 0) return;
             const int applied = t.patches.load() ? t.newDefault : t.stockDefault;
             const int extras = b.cap - applied;
             if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) return;
-            const int total = Settings::Get().privateStorageSlots;
+            const int total = Settings::Startup().slots[0];
             LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "
                      "which will size it to %d.", b.cap, applied, extras, total < kSlotArray ? total : kSlotArray);
             WriteState(extras);
@@ -304,13 +290,78 @@ namespace psm::capacity
             }
         }
 
+        // ------------------------------------------------------------ size table for Master Looter
+        SRWLOCK g_sizeLock = SRWLOCK_INIT;
+        SizeInfo g_sizes[Settings::kStorages];
+        std::atomic<DWORD> g_sizesWanted{0};
+        std::atomic<bool> g_hooked{false};
+
+        uintptr_t RecordByName(const char* want)
+        {
+            uint32_t n = 0;
+            uintptr_t arr = 0;
+            if (!Manager(&n, &arr)) return 0;
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                uintptr_t rec = 0;
+                char name[40];
+                if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
+            }
+            return 0;
+        }
+
+        void RefreshSizes()
+        {
+            SizeInfo fresh[Settings::kStorages]{};
+            for (const Target& t : g_targets)
+            {
+                SizeInfo& o = fresh[t.storage];
+                o.liveCapacity = -1;
+                o.liveUsed = -1;
+                if (const uintptr_t rec = RecordByName(t.name))
+                {
+                    uint16_t d = 0, m = 0;
+                    if (mem::Read16(rec + 0x48, &d) && mem::Read16(rec + 0x4A, &m))
+                    {
+                        o.known = true;
+                        o.appliedDefault = d;
+                        const bool changed = t.seen.load() && t.patches.load() > 0;
+                        o.gameDefault = changed ? t.stockDefault : d;
+                        o.gameMax = changed ? t.stockMax : m;
+                    }
+                }
+                Bucket b{};
+                if (FindBucket(t.name, b))
+                {
+                    o.liveCapacity = b.cap;
+                    o.slotArray = static_cast<int>(b.slots);
+                    o.extras = b.granted + b.story;
+                    uintptr_t holder = PlayerHolder(), arr = 0, bk = 0;
+                    uint32_t n = 0;
+                    if (holder && mem::ReadPtr(holder + 0x18, &arr) && mem::Read32(holder + 0x20, &n) && n <= 128)
+                        for (uint32_t i = 0; i < n; ++i)
+                        {
+                            char name[40];
+                            if (!mem::ReadPtr(arr + 8ull * i, &bk)) continue;
+                            const Bucket full = ReadBucket(bk, true);
+                            if (full.ok && IndexName(full.index, name, sizeof name) && strcmp(name, t.name) == 0) { o.liveUsed = static_cast<int>(full.filled); break; }
+                        }
+                }
+            }
+            AcquireSRWLockExclusive(&g_sizeLock);
+            memcpy(g_sizes, fresh, sizeof fresh);
+            ReleaseSRWLockExclusive(&g_sizeLock);
+        }
+
         DWORD WINAPI Worker(LPVOID)
         {
-            DWORD nextLearn = 0;
+            DWORD nextLearn = 0, nextSizes = 0;
             while (!g_stop.load())
             {
                 Sleep(100);
                 if (g_dump.exchange(false)) Dump();
+                const DWORD tick = GetTickCount();
+                if (tick - g_sizesWanted.load() < 3000 && tick >= nextSizes) { RefreshSizes(); nextSizes = tick + 1000; }
                 const DWORD now = GetTickCount();
                 if (now < nextLearn) continue;
                 nextLearn = now + 2000;
@@ -336,13 +387,13 @@ namespace psm::capacity
 
     void Start()
     {
-        const Settings::Values& v = Settings::Get();
+        const Settings::Values& v = Settings::Startup();
         bool any = false;
         if (!v.leaveCapacityAlone)
         {
             for (Target& t : g_targets)
             {
-                t.wanted = t.kind == kHousing ? v.housingChests1000 : t.kind == kCamp ? v.campStorage1000 : v.privateStorageSlots > 0;
+                t.wanted = v.slots[t.storage] > 0;
                 any |= t.wanted;
             }
         }
@@ -365,7 +416,7 @@ namespace psm::capacity
         if (!any)
         {
             LOG_NOTE("[capacity] %s", v.leaveCapacityAlone ? "LeaveCapacityAlone=1: no storage size is changed"
-                                                            : "HousingChests1000=0, CampStorage1000=0 and PrivateStorageSlots=0: no storage size is changed");
+                                                            : "every Slots setting is 0: no storage size is changed");
             return;
         }
         if (!resolved || !g_addr.inventoryInfoRead)
@@ -387,14 +438,29 @@ namespace psm::capacity
             return;
         }
         g_patching = true;
+        g_hooked = true;
         PatchLoaded();
-        if (v.privateStorageSlots > 0)
-            LOG_NOTE("[capacity] Private Storage target %d slots, counting %d from expansions and story (%s)", v.privateStorageSlots,
+        if (v.slots[0] > 0)
+            LOG_NOTE("[capacity] Private Storage target %d slots, counting %d from expansions and story (%s)", v.slots[0],
                      g_privateExtras, g_extrasFromIni ? "PrivateStorageExpansions" : "learned from the save last time");
         FlushLog();
     }
 
     void RequestDump() { g_dump = true; }
+
+    bool Hooked() { return g_hooked.load(); }
+
+    int LearnedPrivateExtras() { return g_privateExtras; }
+
+    void GetSize(int storage, SizeInfo& out)
+    {
+        g_sizesWanted = GetTickCount();
+        out = SizeInfo{};
+        if (storage < 0 || storage >= Settings::kStorages) return;
+        AcquireSRWLockShared(&g_sizeLock);
+        out = g_sizes[storage];
+        ReleaseSRWLockShared(&g_sizeLock);
+    }
 
     void Stop()
     {

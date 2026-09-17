@@ -39,9 +39,10 @@ add_library(PrivateStorageMaster SHARED
     src/storage/storage.cpp
     src/storage/pad.cpp
     src/storage/capacity.cpp
+    src/api/api.cpp
 )
 
-target_include_directories(PrivateStorageMaster PRIVATE src ${minhook_SOURCE_DIR}/src/hde)
+target_include_directories(PrivateStorageMaster PRIVATE src include ${minhook_SOURCE_DIR}/src/hde)
 target_link_libraries(PrivateStorageMaster PRIVATE minhook)
 target_compile_definitions(PrivateStorageMaster PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
 target_compile_options(PrivateStorageMaster PRIVATE /utf-8 /W3 /EHsc)

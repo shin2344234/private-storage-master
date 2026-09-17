@@ -132,6 +132,9 @@ namespace psm::storage
         std::atomic<DWORD> g_closedAt{0};
         std::atomic<DWORD> g_openedAt{0};
         constexpr DWORD kReopenCooldownMs = 250;
+        std::atomic<DWORD> g_pauseUntil{0};
+        std::atomic<bool> g_ready{false};
+        bool Paused() { return static_cast<int32_t>(g_pauseUntil.load() - GetTickCount()) > 0; }
 
         void* oHandler = nullptr, *oModeSwitch = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr;
 
@@ -465,7 +468,7 @@ namespace psm::storage
 
         LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         {
-            if (m == WM_KEYDOWN || m == WM_SYSKEYDOWN)
+            if ((m == WM_KEYDOWN || m == WM_SYSKEYDOWN) && !Paused())
             {
                 const uint8_t vk = static_cast<uint8_t>(w & 0xFF);
                 const int b = Binding(vk, HeldMods());
@@ -540,6 +543,7 @@ namespace psm::storage
 
         constexpr DWORD kHoldCloseMs = 700;
 
+
         bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
         DWORD WINAPI Poller(LPVOID)
@@ -556,6 +560,7 @@ namespace psm::storage
                 if (now >= nextWindowCheck) { SubclassGameWindow(); nextWindowCheck = now + 500; }
 
                 const bool front = GameInFront();
+                const bool paused = Paused();
                 const uint16_t buttons = front ? pad::Poll() : 0;
                 const Settings::Values& v = Settings::Get();
 
@@ -570,7 +575,7 @@ namespace psm::storage
                 {
                     const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : v.dumpKey;
                     const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk);
-                    if (down && !keyWas[i])
+                    if (down && !keyWas[i] && !paused)
                     {
                         char t[32];
                         LOG("[keys] %s", Settings::KeyText(k, t, sizeof t));
@@ -586,8 +591,8 @@ namespace psm::storage
                     if (down && !was[i])
                     {
                         since[i] = now;
-                        held[i] = false;
-                        g_pending = i;
+                        held[i] = paused;   // a combo that began while paused never acts
+                        if (!paused) g_pending = i;
                     }
                     // Holding a combo for most of a second closes a storage that was
                     // already open when the hold began, in case the press itself was lost.
@@ -654,8 +659,14 @@ namespace psm::storage
         }
         pad::Init();
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
+        g_ready = true;
         return true;
     }
+
+    bool Ready() { return g_ready.load(); }
+    bool KeyWindowFound() { return g_hwnd && g_oldProc && IsWindow(g_hwnd); }
+    int OpenStorage() { return g_open.load() ? g_openChest.load() : -1; }
+    void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount() + ms; }
 
     void Stop()
     {

@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// PrivateStorageMaster.ini, read once at startup.
+// PrivateStorageMaster.ini.
 //
 // Keys are written as names: "F4", "Ctrl+F1", "Shift+I". Controller combos are
 // XInput button names joined with "+": every button but the last is held, the
@@ -11,6 +11,10 @@
 // With no PrivateStorageMaster.ini beside the plugin, a PrivateStorageAnywhere.ini
 // there is read for its bindings and capacity settings, and the new file is
 // written with them.
+//
+// Settings can change while the game runs (Master Looter's Storage tab). Get()
+// hands out the current copy; a change publishes a new copy and the old one is
+// kept alive, so a reader on another thread never sees a half-written value.
 namespace psm::Settings
 {
     enum : uint8_t { kModCtrl = 1, kModShift = 2, kModAlt = 4 };
@@ -27,8 +31,9 @@ namespace psm::Settings
         uint16_t press = 0;    // the one button that fires; 0: no combo
     };
 
-    // Order matches storage::kChests.
+    // Order matches storage::kChests and the capacity targets.
     inline constexpr int kStorages = 9;
+    inline constexpr int kMaxSlots = 1460;   // the slot array every storage has on 2.02
 
     struct Values
     {
@@ -39,20 +44,30 @@ namespace psm::Settings
         KeyBind dumpKey;
 
         bool leaveCapacityAlone = false;
-        bool housingChests1000 = true;
-        bool campStorage1000 = true;          // feed bin, bird feeder, town warehouse, Kuku Pot
-        int  privateStorageSlots = 0;        // 0: the game's own capacity
+        // Slots per storage; 0 keeps the game's size. Storage 0 (Private Storage)
+        // counts purchased expansions in its total, the others are the base size.
+        int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
         int  privateStorageExpansions = -1;  // -1: learn them from the save
         bool imported = false;               // settings came from PrivateStorageAnywhere.ini
     };
 
-    void Load();
-    const Values& Get();
+    void Load();                  // once, at startup
+    const Values& Get();          // current settings
+    const Values& Startup();      // what this launch started with (Enabled and sizes use these)
+    Values Defaults();
 
-    // "Ctrl+F1", "LB + LS", "none".
+    // Checks, publishes and writes the ini. False with a reason when a value is refused.
+    bool Apply(const Values& v, char* why, size_t whyLen);
+    // Reads the ini again and publishes it.
+    void Reload();
+    // True when Enabled or a size setting differs from what this launch started with.
+    bool RestartNeeded();
+
+    // "Ctrl+F1", "LB+LS", "None".
     const char* KeyText(const KeyBind& k, char* out, size_t cap);
     const char* PadText(const PadBind& p, char* out, size_t cap);
 
     // The ini name of each storage, "PrivateStorage", "Gatherables", ...
     const char* StorageKeyName(int storage);
+    const char* StorageLabel(int storage);   // the in-game name
 }

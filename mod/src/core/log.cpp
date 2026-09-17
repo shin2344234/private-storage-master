@@ -19,7 +19,15 @@ namespace psm::Log
     static constexpr size_t         kKeep     = 400;
     static std::atomic<bool>        g_debug{true};
 
+    static std::string              g_lastError;
+
     void SetDebug(bool on) { g_debug.store(on); }
+
+    void LastError(char* out, size_t cap)
+    {
+        std::lock_guard<std::mutex> lk(g_mu);
+        snprintf(out, cap, "%s", g_lastError.c_str());
+    }
     bool Debug() { return g_debug.load(); }
 
     static std::string Stamp()
@@ -42,6 +50,7 @@ namespace psm::Log
         std::string line = "[" + Stamp() + "] [" + level + "] " + msg;
 
         std::lock_guard<std::mutex> lk(g_mu);
+        if (level[0] == 'e') g_lastError = msg;
         g_recent.push_back(line);
         if (g_recent.size() > kKeep) g_recent.pop_front();
         if (g_file)
