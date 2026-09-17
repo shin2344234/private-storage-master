@@ -21,7 +21,7 @@
 // such as Crimson Route, still see them):
 //   Ctrl+F1..F8  open or close Private Storage, Gatherables, Dresser,
 //                Refrigerator, Collecting, Camp Straw, Bird Feed, Town Warehouse
-//   Ctrl+F12     open or close the Kuku Pot (F9 is Glint Spotter's)
+//   Ctrl+F9      open or close the Kuku Pot
 //   Ctrl+Delete  panic: post 0x0F for whatever the controller holds, drop the
 //                IngameMenu phase and the input block
 //   Ctrl+End     toggle the 0x12, 0x14 and 0x0D packets a natural open also sends
@@ -176,7 +176,7 @@ namespace psm::probe
             { "Kuku Pot", "SetInventory(Character,Focus,True;Kuku,Focus,True)",
               "SetWareHouseInventoryName(UI_Inventory_KukuItemList)", "2520550823", "3472366085", "cd_icon_map_kukushop", nullptr },
         };
-        const int kChestKeys[] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F12 };
+        const int kChestKeys[] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9 };
         constexpr int kChestCount = static_cast<int>(sizeof kChests / sizeof kChests[0]);
 
         // ------------------------------------------------------------ captured / shared state
@@ -1223,7 +1223,7 @@ namespace psm::probe
         Hook(kMoveDialogConfirm, hkMoveDialogConfirm, &oMoveDialogConfirm);
         g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
         LOG("[probe] probe 2h running. Ctrl+F1..F8 open or close Private Storage, Gatherables, Dresser, Refrigerator, Collecting, "
-            "Camp Straw, Bird Feed, Town Warehouse; Ctrl+F12 Kuku Pot; "
+            "Camp Straw, Bird Feed, Town Warehouse; Ctrl+F9 Kuku Pot; "
             "Ctrl+Delete panic close; Ctrl+End toggles the 0x12/0x14/0x0D packets (on); Pause dumps state.");
         return true;
     }
