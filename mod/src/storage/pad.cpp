@@ -67,7 +67,9 @@ namespace psm::pad
             for (auto* d = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress); d->Name; ++d)
             {
                 const char* dll = reinterpret_cast<const char*>(base + d->Name);
-                if (_strnicmp(dll, "xinput", 6) != 0) continue;
+                // Any loaded library that exports XInputGetState is an XInput, whatever its version.
+                HMODULE lib = GetModuleHandleA(dll);
+                if (!lib || !GetProcAddress(lib, "XInputGetState")) continue;
                 auto* names = reinterpret_cast<IMAGE_THUNK_DATA64*>(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
                 auto* slots = reinterpret_cast<IMAGE_THUNK_DATA64*>(base + d->FirstThunk);
                 for (; names->u1.AddressOfData; ++names, ++slots)

@@ -9,13 +9,37 @@ the reports their players posted were the guide to what it had to do.
 **Private Storage Anywhere, by Stevi2195.**
 https://www.nexusmods.com/crimsondesert/mods/388,
 source https://github.com/Stevi2195/PrivateStorageAnywhere.
-[PERMISSION_RECORD]
+The upstream repository carries no licence, so nothing from it is copied
+here.
 
 **PrivateStorageAnywherePLUS for Crimson Desert 2.00, by jkiip.**
 https://www.nexusmods.com/crimsondesert/mods/3366,
 source https://github.com/jacobdyoung20-tech/PrivateStorageAnywherePLUS-CD-2.00.
-Its changelog and technical findings are kept in `docs/upstream` for reference.
-They are MIT licensed by that project's contributors; see its `LICENSE.md`.
+Its changelog and technical findings are kept unchanged in `docs/upstream` for
+reference, under that project's MIT grant for its documentation:
+
+    Copyright (c) 2026 the PrivateStorageAnywherePLUS Crimson Desert 2.00
+    compatibility project contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+Nothing from its patched plugin or its tools is used.
 
 ## Code built into the plugin
 
