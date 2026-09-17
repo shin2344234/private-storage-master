@@ -26,9 +26,9 @@ yourself.
 
 SHA-256 for 1.0.0:
 
-    [SHA_DMM]  PrivateStorageMaster-1.0.0-DMM.zip
-    [SHA_ZIP]  PrivateStorageMaster-1.0.0.zip
-    [SHA_ASI]  PrivateStorageMaster.asi
+    009610ab0f423b8af96c074bc67c9c19733aa6142a55560be0431cb6b10d2e65  PrivateStorageMaster-1.0.0-DMM.zip
+    a818e431dce9d36d93b4764a2dfd23ff95a300b2835778b8b6a009ddf3050844  PrivateStorageMaster-1.0.0.zip
+    e022cdcef76dd4c33eb22f2c88995aee27084217643fa9e18e515e005fb13ac7  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
