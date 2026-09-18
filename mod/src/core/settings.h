@@ -74,8 +74,9 @@ namespace psm::Settings
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;
-        // Item numbers. Every currency in the game data: silver (1980), the copper
-        // and silver pouches (1981 to 1988), gold bars, camp funds and supplies,
+        // Item numbers. Every currency in the game data: money (1980, which
+        // item.paloc names both Copper and Silver), the copper and silver
+        // pouches (1981 to 1988), gold bars, camp funds and supplies,
         // Kuku currencies (to 1999), faction contributions, refinement tokens,
         // Marni tokens and the Hernand Bond (2003 to 2018). Private Storage would
         // otherwise take them.

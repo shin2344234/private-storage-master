@@ -329,8 +329,9 @@ namespace psm::Settings
                     "; already carrying stay in your bag. 0 moves the whole stack.\n"
                     "AutoStoreOnlyGained=%d\n\n"
                     "; Item numbers that never move, separated by commas, with ranges written as\n"
-                    "; 1980-1999. The default is every currency: silver, the copper and silver\n"
-                    "; pouches, gold bars, camp funds and supplies, Kuku currencies, faction\n"
+                    "; 1980-1999. The default is every currency: your money (1980, copper and\n"
+                    "; silver), the copper and silver pouches, gold bars, camp funds and\n"
+                    "; supplies, Kuku currencies, faction\n"
                     "; contributions, refinement tokens, Marni tokens and the Hernand Bond.\n"
                     "AutoStoreNeverMove=%s\n",
                     v.autoStoreOnlyGained ? 1 : 0, never);
