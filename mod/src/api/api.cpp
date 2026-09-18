@@ -16,6 +16,14 @@
 
 #define PSM_EXPORT extern "C" PSM_API
 
+// snprintf truncates without complaining, so a game string that outgrows the
+// field just quietly loses its tail. PsmStatus is part of the shipped API and
+// cannot be widened, so fail the build instead.
+static_assert(sizeof PSM_GAME <= sizeof(PsmStatus::gameVersion),
+              "PSM_GAME does not fit PsmStatus::gameVersion");
+static_assert(sizeof PSM_VERSION <= sizeof(PsmStatus::version),
+              "PSM_VERSION does not fit PsmStatus::version");
+
 namespace
 {
     using psm::Settings::Values;
