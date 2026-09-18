@@ -38,8 +38,9 @@ close too. Keys only work in free play.
 
 Holding Ctrl keeps other keys from the game, so a slip off a storage key does
 not fire a skill. W, A, S, D and the arrows get through all the same, and so do
-the keys the game uses with Ctrl itself. Those are Z for the guard's weapon swap,
-plus Shift and +. Ctrl is also the game's guard and lock-on key, so any other key
+the keys the game uses with Ctrl itself. Holding Ctrl is Examine, which reads
+Q, E, R and T, so talking and trading with an NPC on Ctrl+E and Ctrl+R still
+work. Z is the guard's weapon swap, and Shift and + are the other two. Ctrl is also the game's guard and lock-on key, so any other key
 pressed while guarding is held back. Ctrl+F10 turns it off and on and saves the
 choice; HideKeysWithModifier and HideKeysToggleKey in the ini set the same thing.
 
