@@ -512,13 +512,18 @@ namespace psm::storage
         // Z is the second kind, Key_Skill_13 (LB+LT on the pad), so the game reads
         // Ctrl+Z as guard plus Z. Shift (MouseCursorToggle) and "+"
         // (Debug_FreeCamWithCharacterKeyBoard) are the first kind, both debug;
-        // "+" is taken as either plus key. Every other pairing is with the mouse,
-        // which the block never touches.
+        // "+" is taken as either plus key. Ctrl is also Examine
+        // (Gimmick_AimInteraction, OverrideKey1 in inputmap_common.xml), and while
+        // it is held the GimmickInput layer reads Q and E (previous and next), R and
+        // T (actions 1 and 2), and W, A, S, D, which already pass. That is how an NPC
+        // is traded with or talked to on Ctrl+R and Ctrl+E. Every other pairing is
+        // with the mouse, which the block never touches.
         bool GameUsesWithCtrl(uint8_t vk)
         {
             switch (vk)
             {
             case 'Z':
+            case 'Q': case 'E': case 'R': case 'T':
             case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
             case VK_OEM_PLUS: case VK_ADD:
                 return true;

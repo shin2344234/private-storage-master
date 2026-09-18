@@ -50,7 +50,7 @@ namespace psm::Settings
         PadBind pad[kStorages];
         KeyBind dumpKey;
         // While Ctrl (or whatever modifier a storage key uses) is held, keep every
-        // other key from the game too, so Ctrl+Z cannot fire the Z skill.
+        // other key from the game too, so a slip off Ctrl+F1 cannot fire a skill.
         bool hideKeysWithModifier = true;
         // Turns hideKeysWithModifier on and off in game and saves it. Ctrl is the
         // game's guard and lock-on key, so a player may want keys back mid-fight.
