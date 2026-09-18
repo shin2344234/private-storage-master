@@ -74,8 +74,10 @@ namespace psm::Settings
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;
-        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980};   // item numbers; 1980 is silver
-        int autoStoreNeverMoveCount = 1;
+        // Item numbers. 1980 is silver; 1981 to 1988 are the copper and silver
+        // pouches, which Private Storage would otherwise take.
+        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988};
+        int autoStoreNeverMoveCount = 9;
     };
 
     void Load();                  // once, at startup

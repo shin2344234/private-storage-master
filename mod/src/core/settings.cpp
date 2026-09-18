@@ -323,7 +323,8 @@ namespace psm::Settings
                     "\n; 1 moves only the amount you just picked up, so food and potions you were\n"
                     "; already carrying stay in your bag. 0 moves the whole stack.\n"
                     "AutoStoreOnlyGained=%d\n\n"
-                    "; Item numbers that never move, separated by commas. 1980 is silver.\n"
+                    "; Item numbers that never move, separated by commas. 1980 is silver, and 1981\n"
+                    "; to 1988 are the copper and silver pouches.\n"
                     "AutoStoreNeverMove=%s\n",
                     v.autoStoreOnlyGained ? 1 : 0, never);
             fclose(f);
