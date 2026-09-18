@@ -33,6 +33,7 @@ namespace psm::addr
         uintptr_t invMgrVtable = 0;
         uintptr_t invMgrGlobal = 0;
         uintptr_t actorManagerGlobal = 0;
+        uintptr_t clientMoveItem = 0;      // R5: client check and send for an inventory-to-inventory move
     };
 
     // Each returns false and logs what is missing.

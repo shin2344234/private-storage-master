@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 // PrivateStorageMaster.ini.
 //
@@ -37,6 +38,10 @@ namespace psm::Settings
     // Sizes that are not a setting. The Collectibles Chest holds one of each of the
     // 958 collectibles in its data, so it is always given exactly that.
     inline constexpr int kFixedSlots[kStorages] = {0, 0, 0, 0, 958, 0, 0, 0, 0};
+    // Camp Provisions holds packaged trade goods, and the bag's move to it converts
+    // them, so it is never a place loot is stored.
+    inline constexpr int kTownWarehouse = 7;
+    inline constexpr int kNeverMoveMax = 64;
 
     struct Values
     {
@@ -60,6 +65,24 @@ namespace psm::Settings
         int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
         int  privateStorageExpansions = -1;  // -1: learn them from the save
         bool imported = false;               // settings came from PrivateStorageAnywhere.ini
+
+        // Loot straight into storage. Master Looter reports each pickup through
+        // PsmDeposit and storage/deposit moves it. Off until the player turns it on.
+        bool autoStore = false;
+        // Which storages may receive loot. Private Storage last and only when on; the
+        // Wardrobe off so new gear is seen before it is put away.
+        bool autoStoreTo[kStorages] = {false, true, false, true, true, true, true, false, true};
+        // Move the amount just picked up, not the whole stack, so what the player
+        // already carried stays in the bag.
+        bool autoStoreOnlyGained = true;
+        // Item numbers. Every currency in the game data: money (1980, which
+        // item.paloc names both Copper and Silver), the copper and silver
+        // pouches (1981 to 1988), gold bars, camp funds and supplies,
+        // Kuku currencies (to 1999), faction contributions, refinement tokens,
+        // Marni tokens and the Hernand Bond (2003 to 2018). Private Storage would
+        // otherwise take them.
+        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018};
+        int autoStoreNeverMoveCount = 36;
     };
 
     void Load();                  // once, at startup
@@ -69,6 +92,10 @@ namespace psm::Settings
 
     // Checks, publishes and writes the ini. False with a reason when a value is refused.
     bool Apply(const Values& v, char* why, size_t whyLen);
+    // The same, for a change to some fields: change edits the current settings
+    // under the write lock, so two threads changing different fields at once
+    // cannot undo each other. change must not call Apply, Update or Reload.
+    bool Update(const std::function<void(Values&)>& change, char* why, size_t whyLen);
     // Reads the ini again and publishes it.
     void Reload();
     // True when Enabled or a size setting differs from what this launch started with.

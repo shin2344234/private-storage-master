@@ -298,8 +298,89 @@ namespace psm::Settings
                     "; the first start with a new PrivateStorageSlots can come out a little high.\n"
                     "PrivateStorageExpansions=%d\n",
                     v.privateStorageExpansions);
+            fprintf(f,
+                    "\n[AutoStore]\n\n"
+                    "; Loot straight into storage. Master Looter reports what it picks up, and each\n"
+                    "; item goes to the first storage that is on here and takes it, in this order:\n"
+                    "; Collectibles Chest, Abyss gear storage, Gatherables Chest, Kuku Cooler, Bird\n"
+                    "; Feed, Camp Straw, Wardrobe, then Private Storage. The game's own rules decide\n"
+                    "; what each one takes, and what none of them takes stays in your bag. Nothing\n"
+                    "; moves while a storage is open or outside free play.\n"
+                    "AutoStore=%d\n\n"
+                    "; 1 lets that storage receive loot. Private Storage takes almost anything, so it\n"
+                    "; is off by default; the Wardrobe is off so new gear stays with you to look at.\n"
+                    "; Camp Provisions holds trade goods only and never receives loot.\n",
+                    v.autoStore ? 1 : 0);
+            for (int i = 0; i < kStorages; ++i)
+                if (i != kTownWarehouse) fprintf(f, "AutoStore%s=%d\n", kInfo[i].key, v.autoStoreTo[i] ? 1 : 0);
+            // Runs of three or more consecutive numbers are written as a range.
+            char never[kNeverMoveMax * 7] = "";
+            for (int i = 0; i < v.autoStoreNeverMoveCount;)
+            {
+                int end = i;
+                while (end + 1 < v.autoStoreNeverMoveCount && v.autoStoreNeverMove[end + 1] == v.autoStoreNeverMove[end] + 1) ++end;
+                char one[16];
+                if (end - i >= 2) snprintf(one, sizeof one, "%s%u-%u", never[0] ? "," : "", v.autoStoreNeverMove[i], v.autoStoreNeverMove[end]);
+                else { end = i; snprintf(one, sizeof one, "%s%u", never[0] ? "," : "", v.autoStoreNeverMove[i]); }
+                strcat_s(never, one);
+                i = end + 1;
+            }
+            fprintf(f,
+                    "\n; 1 moves only the amount you just picked up, so food and potions you were\n"
+                    "; already carrying stay in your bag. 0 moves the whole stack.\n"
+                    "AutoStoreOnlyGained=%d\n\n"
+                    "; Item numbers that never move, separated by commas, with ranges written as\n"
+                    "; 1980-1999. The default is every currency: your money (1980, copper and\n"
+                    "; silver), the copper and silver pouches, gold bars, camp funds and\n"
+                    "; supplies, Kuku currencies, faction\n"
+                    "; contributions, refinement tokens, Marni tokens and the Hernand Bond.\n"
+                    "AutoStoreNeverMove=%s\n",
+                    v.autoStoreOnlyGained ? 1 : 0, never);
             fclose(f);
             return true;
+        }
+
+        // "1980-1999, 2003": item numbers and ranges, up to kNeverMoveMax numbers.
+        // An empty value clears the list.
+        void ParseItemList(const char* val, Values& out)
+        {
+            out.autoStoreNeverMoveCount = 0;
+            const char* p = val;
+            while (*p)
+            {
+                while (*p == ' ' || *p == ',' || *p == '\t') ++p;
+                if (!*p) break;
+                char* end = nullptr;
+                const unsigned long n = strtoul(p, &end, 10);
+                if (end == p) { LOG_ERR("[settings] AutoStoreNeverMove=%s has something that is not an item number; the rest is ignored", val); break; }
+                unsigned long last = n;
+                p = end;
+                if (*p == '-')
+                {
+                    last = strtoul(p + 1, &end, 10);
+                    if (end == p + 1 || last < n) { LOG_ERR("[settings] AutoStoreNeverMove=%s has a range that does not read; the rest is ignored", val); break; }
+                    p = end;
+                }
+                for (unsigned long k = n; k <= last && k < 0xFFFF; ++k)
+                {
+                    if (out.autoStoreNeverMoveCount == kNeverMoveMax)
+                    {
+                        LOG_ERR("[settings] AutoStoreNeverMove holds at most %d items; %lu and everything after it are left off, "
+                                "and the ini will be saved without them",
+                                kNeverMoveMax, k);
+                        return;
+                    }
+                    out.autoStoreNeverMove[out.autoStoreNeverMoveCount++] = static_cast<uint16_t>(k);
+                }
+            }
+        }
+
+        // AutoStore<Storage>=0|1. False when the rest of the key names no storage.
+        bool AutoStoreSwitch(const char* rest, const char* val, Values& out)
+        {
+            for (int i = 0; i < kStorages; ++i)
+                if (_stricmp(rest, kInfo[i].key) == 0) { out.autoStoreTo[i] = atoi(val) != 0; return true; }
+            return false;
         }
 
         void ReadIni(Values& out)
@@ -328,6 +409,10 @@ namespace psm::Settings
                 else if (_stricmp(key, "HousingChests1000") == 0) { for (int i = 1; i <= 4; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "CampStorage1000") == 0) { for (int i = 5; i <= 8; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "PrivateStorageExpansions") == 0) out.privateStorageExpansions = atoi(val);
+                else if (_stricmp(key, "AutoStore") == 0) out.autoStore = atoi(val) != 0;
+                else if (_stricmp(key, "AutoStoreOnlyGained") == 0) out.autoStoreOnlyGained = atoi(val) != 0;
+                else if (_stricmp(key, "AutoStoreNeverMove") == 0) ParseItemList(val, out);
+                else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
                     KeyBind k;
@@ -384,6 +469,9 @@ namespace psm::Settings
             }
             if (v.privateStorageExpansions < -1) v.privateStorageExpansions = -1;
             if (v.privateStorageExpansions > kMaxSlots) v.privateStorageExpansions = kMaxSlots;
+            v.autoStoreTo[kTownWarehouse] = false;
+            if (v.autoStoreNeverMoveCount < 0) v.autoStoreNeverMoveCount = 0;
+            if (v.autoStoreNeverMoveCount > kNeverMoveMax) v.autoStoreNeverMoveCount = kNeverMoveMax;
         }
 
         // Two bindings on the same key or combo: the later one is turned off.
@@ -446,6 +534,14 @@ namespace psm::Settings
                      "PrivateStorageExpansions=%d", v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a),
                      v.hideKeysWithModifier ? 1 : 0, KeyText(v.hideKeysToggleKey, b, sizeof b), v.leaveCapacityAlone ? 1 : 0,
                      v.privateStorageExpansions);
+            if (v.autoStore)
+            {
+                char to[128] = "";
+                for (int i = 0; i < kStorages; ++i)
+                    if (v.autoStoreTo[i]) { if (to[0]) strcat_s(to, ","); strcat_s(to, kInfo[i].key); }
+                LOG_NOTE("[settings] AutoStore=1 to %s, OnlyGained=%d, %d never-move items", to[0] ? to : "nothing",
+                         v.autoStoreOnlyGained ? 1 : 0, v.autoStoreNeverMoveCount);
+            }
         }
     }
 
@@ -533,43 +629,69 @@ namespace psm::Settings
 
     const Values& Startup() { return g_startup ? *g_startup : Get(); }
 
+    namespace
+    {
+        // Checks v, then publishes it and writes the ini. The caller holds g_writeLock.
+        // 0 refused, 1 applied and saved, 2 applied but not saved.
+        int CommitLocked(Values v, char* why, size_t whyLen)
+        {
+            for (int i = 0; i < kStorages; ++i)
+            {
+                if (v.key[i].vk && !Bindable(v.key[i].vk))
+                {
+                    if (why) snprintf(why, whyLen, "%s: mouse buttons and modifier keys cannot be bound", kInfo[i].label);
+                    return 0;
+                }
+                if (v.pad[i].press && (v.pad[i].hold & v.pad[i].press))
+                {
+                    if (why) snprintf(why, whyLen, "%s: the pressed button is also a held one", kInfo[i].label);
+                    return 0;
+                }
+            }
+            if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
+            {
+                if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
+                return 0;
+            }
+            if (v.hideKeysToggleKey.vk && !Bindable(v.hideKeysToggleKey.vk))
+            {
+                if (why) snprintf(why, whyLen, "Held-key toggle: mouse buttons and modifier keys cannot be bound");
+                return 0;
+            }
+            Clamp(v);
+            Deduplicate(v);
+            v.imported = Get().imported;
+            Publish(v);
+            return WriteIni(v) ? 1 : 2;
+        }
+
+        bool Report(int result, char* why, size_t whyLen)
+        {
+            if (result == 0) return false;
+            LOG("[settings] changed in game%s", result == 1 ? " and saved" : ", but the ini could not be written");
+            if (result == 2 && why) snprintf(why, whyLen, "applied, but %s could not be written", Paths::FileUtf8(PSM_INI).c_str());
+            return result == 1;
+        }
+    }
+
     bool Apply(const Values& in, char* why, size_t whyLen)
     {
         if (why && whyLen) why[0] = 0;
-        Values v = in;
-        for (int i = 0; i < kStorages; ++i)
-        {
-            if (v.key[i].vk && !Bindable(v.key[i].vk))
-            {
-                if (why) snprintf(why, whyLen, "%s: mouse buttons and modifier keys cannot be bound", kInfo[i].label);
-                return false;
-            }
-            if (v.pad[i].press && (v.pad[i].hold & v.pad[i].press))
-            {
-                if (why) snprintf(why, whyLen, "%s: the pressed button is also a held one", kInfo[i].label);
-                return false;
-            }
-        }
-        if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
-        {
-            if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
-            return false;
-        }
-        if (v.hideKeysToggleKey.vk && !Bindable(v.hideKeysToggleKey.vk))
-        {
-            if (why) snprintf(why, whyLen, "Held-key toggle: mouse buttons and modifier keys cannot be bound");
-            return false;
-        }
-        Clamp(v);
-        Deduplicate(v);
         AcquireSRWLockExclusive(&g_writeLock);
-        v.imported = Get().imported;
-        Publish(v);
-        const bool wrote = WriteIni(v);
+        const int result = CommitLocked(in, why, whyLen);
         ReleaseSRWLockExclusive(&g_writeLock);
-        LOG("[settings] changed in game%s", wrote ? " and saved" : ", but the ini could not be written");
-        if (!wrote && why) snprintf(why, whyLen, "applied, but %s could not be written", Paths::FileUtf8(PSM_INI).c_str());
-        return wrote;
+        return Report(result, why, whyLen);
+    }
+
+    bool Update(const std::function<void(Values&)>& change, char* why, size_t whyLen)
+    {
+        if (why && whyLen) why[0] = 0;
+        AcquireSRWLockExclusive(&g_writeLock);
+        Values v = Get();
+        change(v);
+        const int result = CommitLocked(v, why, whyLen);
+        ReleaseSRWLockExclusive(&g_writeLock);
+        return Report(result, why, whyLen);
     }
 
     void Reload()

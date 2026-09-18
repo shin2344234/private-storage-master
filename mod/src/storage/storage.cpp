@@ -13,6 +13,7 @@
 #include "game/farhook.h"
 #include "game/mem.h"
 #include "storage/capacity.h"
+#include "storage/deposit.h"
 #include "storage/pad.h"
 
 namespace psm::storage
@@ -339,6 +340,9 @@ namespace psm::storage
             mem::Read8(pm + A.phaseScreenOff, &screen);
             g_freePlay = mode == 4 && screen == kScreenIngame;
             g_lastTick = GetTickCount();
+            // Loot moves only in free play, with no storage open or about to open,
+            // so a deposit never races the warehouse screen.
+            deposit::Tick(g_freePlay.load() && !g_open.load() && g_switchTo < 0);
 
             if (g_switchTo >= 0 && !g_open.load())
             {
@@ -689,11 +693,10 @@ namespace psm::storage
         // player did on purpose and the next log should say which way it went.
         void ToggleHideKeys()
         {
-            Settings::Values v = Settings::Get();
-            v.hideKeysWithModifier = !v.hideKeysWithModifier;
+            bool on = false;
             char why[160];
-            const bool saved = Settings::Apply(v, why, sizeof why);
-            LOG_NOTE("[keys] HideKeysWithModifier is now %s%s%s", v.hideKeysWithModifier ? "on" : "off",
+            const bool saved = Settings::Update([&on](Settings::Values& v) { on = v.hideKeysWithModifier = !v.hideKeysWithModifier; }, why, sizeof why);
+            LOG_NOTE("[keys] HideKeysWithModifier is now %s%s%s", on ? "on" : "off",
                      saved ? "" : ", but it was not saved: ", saved ? "" : why);
         }
 
@@ -756,6 +759,13 @@ namespace psm::storage
                         else ToggleHideKeys();
                     }
                     keyWas[i] = down;
+                }
+                {
+                    // Deposit test (auto-store): Ctrl+F11, only with DebugLog=1.
+                    static bool probeWas = false;
+                    const bool down = front && v.debugLog && mods == Settings::kModCtrl && KeyDown(VK_F11);
+                    if (down && !probeWas && !paused) deposit::DebugNextBagStack();
+                    probeWas = down;
                 }
                 for (int i = 0; i < Settings::kStorages; ++i)
                 {

@@ -11,6 +11,7 @@
 #include "game/addresses.h"
 #include "game/farhook.h"
 #include "game/mem.h"
+#include "storage/inventory.h"
 #include "storage/storage.h"
 
 namespace psm::capacity
@@ -27,6 +28,12 @@ namespace psm::capacity
         std::atomic<bool> g_dump{false};
         HANDLE g_thread = nullptr;
         void* oRead = nullptr;
+
+        using inv::IndexName;
+        using inv::Manager;
+        using inv::PlayerHolder;
+        using inv::RecordByName;
+        using inv::RecordName;
 
         struct Target
         {
@@ -118,13 +125,6 @@ namespace psm::capacity
             else t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
         }
 
-        bool RecordName(uintptr_t rec, char* out, size_t cap)
-        {
-            uintptr_t node = 0, text = 0;
-            out[0] = 0;
-            return mem::ReadPtr(rec + 8, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
-        }
-
         // Loader threads call this. It compares a name and writes two words, and
         // nothing else: no allocation, no locks the game holds, no game calls.
         void PatchRecord(uintptr_t rec)
@@ -164,36 +164,6 @@ namespace psm::capacity
         }
 
         // ------------------------------------------------------------ game reads
-        uintptr_t Manager(uint32_t* count, uintptr_t* records)
-        {
-            uintptr_t mgr = 0;
-            if (!g_addr.invMgrGlobal || !mem::ReadPtr(g_addr.invMgrGlobal, &mgr)) return 0;
-            uintptr_t vt = 0;
-            if (!mem::ReadPtr(mgr, &vt) || vt != g_addr.invMgrVtable) return 0;
-            if (!mem::Read32(mgr + 0x08, count) || *count == 0 || *count > 256 || !mem::ReadPtr(mgr + 0x58, records)) return 0;
-            return mgr;
-        }
-
-        bool IndexName(uint16_t index, char* out, size_t cap)
-        {
-            uint32_t n = 0;
-            uintptr_t arr = 0, rec = 0;
-            out[0] = 0;
-            return Manager(&n, &arr) && index < n && mem::ReadPtr(arr + 8ull * index, &rec) && RecordName(rec, out, cap);
-        }
-
-        // Controlled character's inventory holder (R3C 5).
-        uintptr_t PlayerHolder()
-        {
-            uintptr_t g = 0, mgr = 0, user = 0, ch = 0, comp = 0, holder = 0, owner = 0;
-            if (!g_addr.actorManagerGlobal || !mem::ReadPtr(g_addr.actorManagerGlobal, &g) || !mem::ReadPtr(g + 0x30, &mgr) ||
-                !mem::ReadPtr(mgr + 0x58, &user) || !mem::ReadPtr(user + 0xD8, &ch) || !mem::ReadPtr(ch + 0x68, &comp) ||
-                !mem::ReadPtr(comp + 0xB8, &holder))
-                return 0;
-            if (!mem::ReadPtr(holder + 8, &owner) || owner != ch) return 0;
-            return holder;
-        }
-
         struct Bucket { uint16_t index; int16_t cap, requested, granted, story; uint32_t slots; uint32_t filled; bool ok; };
 
         Bucket ReadBucket(uintptr_t bk, bool countItems)
@@ -279,7 +249,6 @@ namespace psm::capacity
             }
         }
 
-        uintptr_t RecordByName(const char* want);
         int s_candidate = -1;
         int s_agreed = 0;
 
@@ -357,20 +326,6 @@ namespace psm::capacity
         SizeInfo g_sizes[Settings::kStorages];
         std::atomic<DWORD> g_sizesWanted{0};
         std::atomic<bool> g_hooked{false};
-
-        uintptr_t RecordByName(const char* want)
-        {
-            uint32_t n = 0;
-            uintptr_t arr = 0;
-            if (!Manager(&n, &arr)) return 0;
-            for (uint32_t i = 0; i < n; ++i)
-            {
-                uintptr_t rec = 0;
-                char name[40];
-                if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
-            }
-            return 0;
-        }
 
         void RefreshSizes()
         {
@@ -475,6 +430,7 @@ namespace psm::capacity
             if (i == 0) LOG("[capacity] addresses not found yet, retrying");
             Sleep(500);
         }
+        inv::SetAddresses(g_addr);   // deposits and the size table read through these
         g_thread = CreateThread(nullptr, 0, Worker, nullptr, 0, nullptr);
         if (!any)
         {
