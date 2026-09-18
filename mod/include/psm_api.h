@@ -135,7 +135,7 @@ typedef struct PsmAutoStore
     int32_t  enabled;                       /* the master switch, off by default */
     int32_t  storages[PSM_STORAGES];        /* 1 = may receive loot; Camp Provisions is always 0 */
     int32_t  onlyGained;                    /* 1 = move what was picked up, 0 = the whole stack */
-    int32_t  available;                     /* read only: this game version has the move PSM needs */
+    int32_t  available;                     /* read only: the move and PSM's frame hook are both in */
 } PsmAutoStore;
 /* The live values, or the defaults when defaults is nonzero. */
 PSM_API int         PsmGetAutoStore(PsmAutoStore* out, int defaults);
@@ -153,7 +153,9 @@ PSM_API int         PsmGetNeverMove(uint16_t* items, int max, int defaults);
 PSM_API int         PsmApplyNeverMove(const uint16_t* items, int count, char* why, int whyLen);
 
 /* Any thread. 1 when queued; 0 when auto-store is off, this game version lacks
- * the move, or the queue is full. */
+ * the move, the player is not in free play (a shop, a craft, a menu, a load),
+ * a storage is open, or the queue is full. Nothing is queued on 0, so call it
+ * as the pickup lands. */
 PSM_API int         PsmDeposit(uint16_t item, int64_t gained);
 
 #define PSM_DEPOSIT_STORED              1   /* moved is how many went into storage */

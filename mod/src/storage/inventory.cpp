@@ -24,7 +24,8 @@ namespace psm::inv
     }
 
     bool Ready() { return g_ready.load(std::memory_order_acquire); }
-    bool CanMove() { return Ready() && g_addr.clientMoveItem != 0; }
+    // The move and every read a deposit needs to find the bag and the storages.
+    bool CanMove() { return Ready() && g_addr.clientMoveItem && g_addr.invMgrGlobal && g_addr.invMgrVtable && g_addr.actorManagerGlobal; }
 
     uintptr_t Manager(uint32_t* count, uintptr_t* records)
     {

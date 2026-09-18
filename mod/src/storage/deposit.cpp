@@ -8,6 +8,7 @@
 #include "core/settings.h"
 #include "game/mem.h"
 #include "storage/inventory.h"
+#include "storage/storage.h"
 
 namespace psm::deposit
 {
@@ -23,9 +24,19 @@ namespace psm::deposit
         constexpr int kOrderCount = static_cast<int>(sizeof kOrder / sizeof kOrder[0]);
         constexpr int kCollecting = 4;
 
-        constexpr DWORD kWaitForBagMs = 1500;   // a pickup is its own server request
-        constexpr DWORD kConfirmMs = 1000;
-        constexpr DWORD kFullForMs = 10000;     // a full storage is not asked again for this long
+        // Times are GetTickCount64, so nothing here wraps and a zero deadline is in the past.
+        using Tick64 = ULONGLONG;
+        constexpr Tick64 kWaitForBagMs = 1500;   // a pickup is its own server request
+        // A part that arrived is counted once this long has passed. Nothing arriving
+        // counts as a refusal only after kRefusedAfterMs, because a slow frame or
+        // a busy server can land the move late, and sending the same amount to the
+        // next storage then would take it out of what the player already carried.
+        // It also takes kRefusedAfterFrames frames, so one long hitch cannot use up
+        // the whole wait before the game has had a frame to land the move.
+        constexpr Tick64 kConfirmMs = 1000;
+        constexpr Tick64 kRefusedAfterMs = 5000;
+        constexpr int kRefusedAfterFrames = 60;
+        constexpr Tick64 kFullForMs = 10000;     // a full storage is not asked again for this long
         constexpr int kSendsPerFrame = 4;
 
         // ---------------------------------------------------------------- incoming queue, any thread
@@ -73,7 +84,7 @@ namespace psm::deposit
             int lastStorage = -1;      // where the last part went
             bool debug = false;
             Phase phase = Phase::Find;
-            DWORD waitingSince = 0;    // Find: when the wait for the bag began
+            Tick64 waitingSince = 0;   // Find: when the wait for the bag began
             int nextOrder = 0;         // first kOrder position still to try
             bool sawFull = false;
             // Confirm
@@ -81,7 +92,14 @@ namespace psm::deposit
             uintptr_t target = 0;      // the storage's bucket
             int64_t targetBefore = 0;  // how many of the item it held before the send
             int64_t amount = 0;
-            DWORD sentAt = 0;
+            Tick64 sentAt = 0;
+            int framesSinceSent = 0;
+            // The last send that timed out as a refusal. It is read again before every
+            // later send, and whatever landed there after all is counted.
+            int lateStorage = -1;
+            uintptr_t lateTarget = 0;
+            int64_t lateBefore = 0;
+            int64_t lateAmount = 0;
         };
         constexpr int kJobMax = 64;
         Job g_jobs[kJobMax];
@@ -89,7 +107,7 @@ namespace psm::deposit
 
         // Per storage: full until this tick. Per item and storage: the server refused
         // it once this session, so it is not offered there again.
-        DWORD g_fullUntil[Settings::kStorages] = {};
+        Tick64 g_fullUntil[Settings::kStorages] = {};
         struct Refused { uint16_t item; int8_t storage; };
         constexpr int kRefusedMax = 256;
         Refused g_refused[kRefusedMax];
@@ -111,6 +129,13 @@ namespace psm::deposit
             g_refused[g_refusedNext] = Refused{item, static_cast<int8_t>(storage)};
             g_refusedNext = (g_refusedNext + 1) % kRefusedMax;
             if (g_refusedCount < kRefusedMax) ++g_refusedCount;
+        }
+
+        // The storage took it after all. The entry stays in the ring, marked unused.
+        void ForgetRefused(uint16_t item, int storage)
+        {
+            for (int i = 0; i < g_refusedCount; ++i)
+                if (g_refused[i].item == item && g_refused[i].storage == storage) g_refused[i].storage = -1;
         }
 
         bool NeverMove(const Settings::Values& v, uint16_t item)
@@ -172,10 +197,32 @@ namespace psm::deposit
             j.item = 0xFFFF;
         }
 
+        // A send that timed out may have landed since. Count what did, so the next
+        // send is sized from what is really still in the bag. True when that
+        // finished the job.
+        bool SettleLate(Job& j)
+        {
+            if (j.lateStorage < 0) return false;
+            const int64_t after = inv::ItemTotal(j.lateTarget, j.item);
+            const int64_t arrived = after >= 0 ? after - j.lateBefore : 0;
+            if (arrived <= 0) return false;
+            const int64_t moved = arrived < j.lateAmount ? arrived : j.lateAmount;
+            LOG("[deposit] item %u: %lld reached %s after all", j.item, static_cast<long long>(moved), Settings::StorageLabel(j.lateStorage));
+            ForgetRefused(j.item, j.lateStorage);
+            j.moved += moved;
+            j.left -= moved;
+            j.lastStorage = j.lateStorage;
+            j.lateStorage = -1;
+            if (j.left > 0 && Settings::Get().autoStoreOnlyGained && !j.debug) return false;
+            End(j, kStored);
+            return true;
+        }
+
         // Offers the job's item to each storage from job.nextOrder on. True when one
         // took the request; the job then waits for that storage to show it.
-        bool Send(Job& j, const Bag& b, const Settings::Values& v, DWORD now)
+        bool Send(Job& j, const Bag& b, const Settings::Values& v, Tick64 now)
         {
+            if (SettleLate(j)) return false;
             uint32_t slot = 0;
             inv::Slot s;
             bool onlyLocked = false;
@@ -194,7 +241,7 @@ namespace psm::deposit
             {
                 const int st = kOrder[j.nextOrder];
                 if (!v.autoStoreTo[st] || WasRefused(j.item, st)) continue;
-                if (static_cast<int32_t>(g_fullUntil[st] - now) > 0) { j.sawFull = true; continue; }
+                if (g_fullUntil[st] > now) { j.sawFull = true; continue; }
                 const int idx = inv::IndexByName(inv::kRecordNames[st]);
                 const uintptr_t target = idx >= 0 ? inv::BucketByIndex(b.holder, static_cast<uint16_t>(idx)) : 0;
                 const int mi = target ? inv::MoveIndex(b.record, static_cast<uint16_t>(b.index), static_cast<uint16_t>(idx)) : -1;
@@ -225,6 +272,7 @@ namespace psm::deposit
                     j.targetBefore = before;
                     j.amount = send;
                     j.sentAt = now;
+                    j.framesSinceSent = 0;
                     LOG("[deposit] item %u: sent %lld of the %lld in bag slot %u to %s, which held %lld", j.item, static_cast<long long>(send),
                         static_cast<long long>(s.count), slot, Settings::StorageLabel(st), static_cast<long long>(before));
                     return true;
@@ -233,7 +281,7 @@ namespace psm::deposit
                 {
                     g_fullUntil[st] = now + kFullForMs;
                     j.sawFull = true;
-                    LOG("[deposit] %s is full; not asked again for %u s", Settings::StorageLabel(st), kFullForMs / 1000);
+                    LOG("[deposit] %s is full; not asked again for %u s", Settings::StorageLabel(st), static_cast<unsigned>(kFullForMs / 1000));
                 }
                 else if (err != inv::kErrCantMoveItem)
                     LOG("[deposit] item %u: %s answered %s (0x%08X)", j.item, Settings::StorageLabel(st), inv::ErrName(err), err);
@@ -244,8 +292,9 @@ namespace psm::deposit
 
         // The storage's own count of the item, read again. A stack that merges into
         // one already there leaves the used slots alone, so the total is the test.
-        void Confirm(Job& j, DWORD now)
+        void Confirm(Job& j, Tick64 now)
         {
+            ++j.framesSinceSent;
             const int64_t after = inv::ItemTotal(j.target, j.item);
             const int64_t arrived = after >= 0 ? after - j.targetBefore : 0;
             if (arrived >= j.amount || (arrived > 0 && now - j.sentAt > kConfirmMs))
@@ -262,10 +311,14 @@ namespace psm::deposit
                 if (j.left <= 0 || !Settings::Get().autoStoreOnlyGained || j.debug) End(j, kStored);
                 return;
             }
-            if (now - j.sentAt <= kConfirmMs) return;
+            if (now - j.sentAt <= kRefusedAfterMs || j.framesSinceSent < kRefusedAfterFrames) return;
             // The client check passed but nothing arrived: the server said no.
             LOG("[deposit] item %u: %s took the request but the server kept the item in the bag", j.item, Settings::StorageLabel(j.storage));
             RememberRefused(j.item, j.storage);
+            j.lateStorage = j.storage;
+            j.lateTarget = j.target;
+            j.lateBefore = j.targetBefore;
+            j.lateAmount = j.amount;
             j.phase = Phase::Find;
             ++j.nextOrder;
             j.waitingSince = now;
@@ -280,11 +333,17 @@ namespace psm::deposit
         }
     }
 
-    bool Available() { return inv::CanMove() && !g_broken; }
+    // Moves are sent from the storage frame tick, so without its hooks nothing
+    // queued would ever run or report.
+    bool Available() { return inv::CanMove() && storage::Ready() && !g_broken; }
 
     bool Queue(uint16_t item, int64_t gained)
     {
         if (item == 0xFFFF || gained <= 0 || !Settings::Get().autoStore || !Available()) return false;
+        // A real pickup happens in free play. Anything reported from a shop, a craft
+        // or a menu is refused here rather than queued, so a purchase cannot be
+        // taken for loot.
+        if (storage::PlayState() != storage::Play::Free || storage::OpenStorage() >= 0) return false;
         return Push(Request{item, gained, false});
     }
 
@@ -322,7 +381,7 @@ namespace psm::deposit
         ReleaseSRWLockExclusive(&g_queueLock);
 
         const Settings::Values& v = Settings::Get();
-        const DWORD now = GetTickCount();
+        const Tick64 now = GetTickCount64();
         for (int i = 0; i < n; ++i)
         {
             const Request& r = in[i];
@@ -361,6 +420,10 @@ namespace psm::deposit
                 Confirm(j, now);
                 continue;
             }
+            // The settings can change while a job waits. The debug key ignores only the
+            // master switch.
+            if (!j.debug && !v.autoStore) { End(j, kOff); continue; }
+            if (NeverMove(v, j.item)) { End(j, kNeverMoved); continue; }
             // Nothing is sent outside free play or with a storage open; the wait for
             // the bag starts over when play resumes.
             if (!bag || !canMove) { j.waitingSince = now; continue; }

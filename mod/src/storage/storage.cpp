@@ -693,11 +693,10 @@ namespace psm::storage
         // player did on purpose and the next log should say which way it went.
         void ToggleHideKeys()
         {
-            Settings::Values v = Settings::Get();
-            v.hideKeysWithModifier = !v.hideKeysWithModifier;
+            bool on = false;
             char why[160];
-            const bool saved = Settings::Apply(v, why, sizeof why);
-            LOG_NOTE("[keys] HideKeysWithModifier is now %s%s%s", v.hideKeysWithModifier ? "on" : "off",
+            const bool saved = Settings::Update([&on](Settings::Values& v) { on = v.hideKeysWithModifier = !v.hideKeysWithModifier; }, why, sizeof why);
+            LOG_NOTE("[keys] HideKeysWithModifier is now %s%s%s", on ? "on" : "off",
                      saved ? "" : ", but it was not saved: ", saved ? "" : why);
         }
 

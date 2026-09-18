@@ -46,9 +46,8 @@ namespace
         out->privateStorageExpansions = v.privateStorageExpansions;
     }
 
-    Values FromC(const PsmSettings* in)
+    void FromC(const PsmSettings* in, Values& v)
     {
-        Values v = psm::Settings::Get();
         v.enabled = in->enabled != 0;
         v.debugLog = in->debugLog != 0;
         for (int i = 0; i < PSM_STORAGES; ++i)
@@ -60,7 +59,6 @@ namespace
         v.dumpKey = {in->dumpKey.vk, static_cast<uint8_t>(in->dumpKey.mods & 7)};
         v.leaveCapacityAlone = in->leaveCapacityAlone != 0;
         v.privateStorageExpansions = in->privateStorageExpansions;
-        return v;
     }
 }
 
@@ -112,7 +110,7 @@ PSM_EXPORT int PsmApplySettings(const PsmSettings* in, char* why, int whyLen)
         if (why && whyLen > 0) snprintf(why, whyLen, "settings struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
         return 0;
     }
-    return psm::Settings::Apply(FromC(in), why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    return psm::Settings::Update([in](Values& v) { FromC(in, v); }, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }
 
 PSM_EXPORT int PsmReloadSettings(void)
@@ -169,10 +167,12 @@ PSM_EXPORT int PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLen)
         if (why && whyLen > 0) snprintf(why, whyLen, "key block struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
         return 0;
     }
-    Values v = psm::Settings::Get();
-    v.hideKeysWithModifier = in->on != 0;
-    v.hideKeysToggleKey = {in->toggleKey.vk, static_cast<uint8_t>(in->toggleKey.mods & 7)};
-    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    const auto change = [in](Values& v)
+    {
+        v.hideKeysWithModifier = in->on != 0;
+        v.hideKeysToggleKey = {in->toggleKey.vk, static_cast<uint8_t>(in->toggleKey.mods & 7)};
+    };
+    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }
 
 static_assert(PSM_DEPOSIT_STORED == psm::deposit::kStored && PSM_DEPOSIT_BUSY == psm::deposit::kBusy,
@@ -200,11 +200,13 @@ PSM_EXPORT int PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen)
         if (why && whyLen > 0) snprintf(why, whyLen, "auto-store struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
         return 0;
     }
-    Values v = psm::Settings::Get();
-    v.autoStore = in->enabled != 0;
-    for (int i = 0; i < PSM_STORAGES; ++i) v.autoStoreTo[i] = in->storages[i] != 0;
-    v.autoStoreOnlyGained = in->onlyGained != 0;
-    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    const auto change = [in](Values& v)
+    {
+        v.autoStore = in->enabled != 0;
+        for (int i = 0; i < PSM_STORAGES; ++i) v.autoStoreTo[i] = in->storages[i] != 0;
+        v.autoStoreOnlyGained = in->onlyGained != 0;
+    };
+    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }
 
 static_assert(PSM_NEVER_MOVE_MAX == psm::Settings::kNeverMoveMax, "PSM_NEVER_MOVE_MAX and Settings::kNeverMoveMax must match");
@@ -239,10 +241,12 @@ PSM_EXPORT int PsmApplyNeverMove(const uint16_t* items, int count, char* why, in
         sorted[at] = items[i];
         ++n;
     }
-    Values v = psm::Settings::Get();
-    memcpy(v.autoStoreNeverMove, sorted, sizeof(uint16_t) * n);
-    v.autoStoreNeverMoveCount = n;
-    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    const auto change = [&sorted, n](Values& v)
+    {
+        memcpy(v.autoStoreNeverMove, sorted, sizeof(uint16_t) * n);
+        v.autoStoreNeverMoveCount = n;
+    };
+    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }
 
 PSM_EXPORT int PsmDeposit(uint16_t item, int64_t gained) { return psm::deposit::Queue(item, gained) ? 1 : 0; }

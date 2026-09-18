@@ -32,14 +32,16 @@ namespace psm::deposit
         int64_t moved;
     };
 
-    // Any thread. False when auto-store is off, the move function is missing or
+    // Any thread. False, with nothing queued, when auto-store is off, the move
+    // function is missing, the player is not in free play, a storage is open or
     // the queue is full.
     bool Queue(uint16_t item, int64_t gained);
     // Game thread, every frame. canMove: free play with no storage screen open.
     void Tick(bool canMove);
     // Copies out and forgets finished deposits, oldest first.
     int TakeResults(Result* out, int max);
-    // The move function was found, so deposits can work at all.
+    // The move function and the reads it needs were found and the storage frame
+    // hook is in, so deposits can work at all.
     bool Available();
 
     // Ctrl+F11 with DebugLog=1: deposit half of the next bag stack, through the

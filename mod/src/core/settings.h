@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 // PrivateStorageMaster.ini.
 //
@@ -91,6 +92,10 @@ namespace psm::Settings
 
     // Checks, publishes and writes the ini. False with a reason when a value is refused.
     bool Apply(const Values& v, char* why, size_t whyLen);
+    // The same, for a change to some fields: change edits the current settings
+    // under the write lock, so two threads changing different fields at once
+    // cannot undo each other. change must not call Apply, Update or Reload.
+    bool Update(const std::function<void(Values&)>& change, char* why, size_t whyLen);
     // Reads the ini again and publishes it.
     void Reload();
     // True when Enabled or a size setting differs from what this launch started with.

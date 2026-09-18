@@ -346,7 +346,7 @@ namespace psm::Settings
         {
             out.autoStoreNeverMoveCount = 0;
             const char* p = val;
-            while (*p && out.autoStoreNeverMoveCount < kNeverMoveMax)
+            while (*p)
             {
                 while (*p == ' ' || *p == ',' || *p == '\t') ++p;
                 if (!*p) break;
@@ -361,8 +361,17 @@ namespace psm::Settings
                     if (end == p + 1 || last < n) { LOG_ERR("[settings] AutoStoreNeverMove=%s has a range that does not read; the rest is ignored", val); break; }
                     p = end;
                 }
-                for (unsigned long k = n; k <= last && k < 0xFFFF && out.autoStoreNeverMoveCount < kNeverMoveMax; ++k)
+                for (unsigned long k = n; k <= last && k < 0xFFFF; ++k)
+                {
+                    if (out.autoStoreNeverMoveCount == kNeverMoveMax)
+                    {
+                        LOG_ERR("[settings] AutoStoreNeverMove holds at most %d items; %lu and everything after it are left off, "
+                                "and the ini will be saved without them",
+                                kNeverMoveMax, k);
+                        return;
+                    }
                     out.autoStoreNeverMove[out.autoStoreNeverMoveCount++] = static_cast<uint16_t>(k);
+                }
             }
         }
 
@@ -620,43 +629,69 @@ namespace psm::Settings
 
     const Values& Startup() { return g_startup ? *g_startup : Get(); }
 
+    namespace
+    {
+        // Checks v, then publishes it and writes the ini. The caller holds g_writeLock.
+        // 0 refused, 1 applied and saved, 2 applied but not saved.
+        int CommitLocked(Values v, char* why, size_t whyLen)
+        {
+            for (int i = 0; i < kStorages; ++i)
+            {
+                if (v.key[i].vk && !Bindable(v.key[i].vk))
+                {
+                    if (why) snprintf(why, whyLen, "%s: mouse buttons and modifier keys cannot be bound", kInfo[i].label);
+                    return 0;
+                }
+                if (v.pad[i].press && (v.pad[i].hold & v.pad[i].press))
+                {
+                    if (why) snprintf(why, whyLen, "%s: the pressed button is also a held one", kInfo[i].label);
+                    return 0;
+                }
+            }
+            if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
+            {
+                if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
+                return 0;
+            }
+            if (v.hideKeysToggleKey.vk && !Bindable(v.hideKeysToggleKey.vk))
+            {
+                if (why) snprintf(why, whyLen, "Held-key toggle: mouse buttons and modifier keys cannot be bound");
+                return 0;
+            }
+            Clamp(v);
+            Deduplicate(v);
+            v.imported = Get().imported;
+            Publish(v);
+            return WriteIni(v) ? 1 : 2;
+        }
+
+        bool Report(int result, char* why, size_t whyLen)
+        {
+            if (result == 0) return false;
+            LOG("[settings] changed in game%s", result == 1 ? " and saved" : ", but the ini could not be written");
+            if (result == 2 && why) snprintf(why, whyLen, "applied, but %s could not be written", Paths::FileUtf8(PSM_INI).c_str());
+            return result == 1;
+        }
+    }
+
     bool Apply(const Values& in, char* why, size_t whyLen)
     {
         if (why && whyLen) why[0] = 0;
-        Values v = in;
-        for (int i = 0; i < kStorages; ++i)
-        {
-            if (v.key[i].vk && !Bindable(v.key[i].vk))
-            {
-                if (why) snprintf(why, whyLen, "%s: mouse buttons and modifier keys cannot be bound", kInfo[i].label);
-                return false;
-            }
-            if (v.pad[i].press && (v.pad[i].hold & v.pad[i].press))
-            {
-                if (why) snprintf(why, whyLen, "%s: the pressed button is also a held one", kInfo[i].label);
-                return false;
-            }
-        }
-        if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
-        {
-            if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
-            return false;
-        }
-        if (v.hideKeysToggleKey.vk && !Bindable(v.hideKeysToggleKey.vk))
-        {
-            if (why) snprintf(why, whyLen, "Held-key toggle: mouse buttons and modifier keys cannot be bound");
-            return false;
-        }
-        Clamp(v);
-        Deduplicate(v);
         AcquireSRWLockExclusive(&g_writeLock);
-        v.imported = Get().imported;
-        Publish(v);
-        const bool wrote = WriteIni(v);
+        const int result = CommitLocked(in, why, whyLen);
         ReleaseSRWLockExclusive(&g_writeLock);
-        LOG("[settings] changed in game%s", wrote ? " and saved" : ", but the ini could not be written");
-        if (!wrote && why) snprintf(why, whyLen, "applied, but %s could not be written", Paths::FileUtf8(PSM_INI).c_str());
-        return wrote;
+        return Report(result, why, whyLen);
+    }
+
+    bool Update(const std::function<void(Values&)>& change, char* why, size_t whyLen)
+    {
+        if (why && whyLen) why[0] = 0;
+        AcquireSRWLockExclusive(&g_writeLock);
+        Values v = Get();
+        change(v);
+        const int result = CommitLocked(v, why, whyLen);
+        ReleaseSRWLockExclusive(&g_writeLock);
+        return Report(result, why, whyLen);
     }
 
     void Reload()
