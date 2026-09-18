@@ -300,12 +300,15 @@ namespace psm::Settings
                     v.privateStorageExpansions);
             fprintf(f,
                     "\n[AutoStore]\n\n"
-                    "; Loot straight into storage. Master Looter reports what it picks up, and each\n"
-                    "; item goes to the first storage that is on here and takes it, in this order:\n"
-                    "; Collectibles Chest, Abyss gear storage, Gatherables Chest, Kuku Cooler, Bird\n"
-                    "; Feed, Camp Straw, Wardrobe, then Private Storage. The game's own rules decide\n"
-                    "; what each one takes, and what none of them takes stays in your bag. Nothing\n"
-                    "; moves while a storage is open or outside free play.\n"
+                    "; Loot straight into storage. Needs Master Looter 1.6.28 or later; on its own\n"
+                    "; this section does nothing. Master Looter reports what it picks up (auto-loot,\n"
+                    "; body searches, gathers), and each item goes to the first storage that is on\n"
+                    "; here and takes it, in this order: Collectibles Chest, Abyss gear storage,\n"
+                    "; Gatherables Chest, Kuku Cooler, Bird Feed, Camp Straw, Wardrobe, then Private\n"
+                    "; Storage. The game's own rules decide what each one takes, and what none of\n"
+                    "; them takes stays in your bag. What you pick up by hand, buy, craft or take out\n"
+                    "; of storage is never moved. Master Looter's Storage tab has all of this under\n"
+                    "; Store loot.\n"
                     "AutoStore=%d\n\n"
                     "; 1 lets that storage receive loot. Private Storage takes almost anything, so it\n"
                     "; is off by default; the Wardrobe is off so new gear stays with you to look at.\n"
@@ -330,10 +333,10 @@ namespace psm::Settings
                     "; already carrying stay in your bag. 0 moves the whole stack.\n"
                     "AutoStoreOnlyGained=%d\n\n"
                     "; Item numbers that never move, separated by commas, with ranges written as\n"
-                    "; 1980-1999. The default is every currency: your money (1980, copper and\n"
-                    "; silver), the copper and silver pouches, gold bars, camp funds and\n"
-                    "; supplies, Kuku currencies, faction\n"
-                    "; contributions, refinement tokens, Marni tokens and the Hernand Bond.\n"
+                    "; 1980-1999, at most 64. The default is every currency: your money (1980,\n"
+                    "; copper and silver), the copper and silver pouches, gold bars, camp funds and\n"
+                    "; supplies, Kuku currencies, faction contributions, refinement tokens, Marni\n"
+                    "; tokens and the Hernand Bond. Master Looter's Never move list edits it by name.\n"
                     "AutoStoreNeverMove=%s\n",
                     v.autoStoreOnlyGained ? 1 : 0, never);
             fclose(f);

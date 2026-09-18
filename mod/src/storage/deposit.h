@@ -47,7 +47,7 @@ namespace psm::deposit
     // hook is in, so deposits can work at all.
     bool Available();
 
-    // Ctrl+F11 with DebugLog=1: deposit half of the next bag stack, through the
+    // Test builds only (PSM_DEPOSIT_TEST_KEY). Ctrl+F11 with DebugLog=1: deposit half of the next bag stack, through the
     // same path Master Looter uses, ignoring only the AutoStore master switch.
     void DebugNextBagStack();
 }

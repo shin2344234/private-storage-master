@@ -760,13 +760,16 @@ namespace psm::storage
                     }
                     keyWas[i] = down;
                 }
+#ifdef PSM_DEPOSIT_TEST_KEY
                 {
-                    // Deposit test (auto-store): Ctrl+F11, only with DebugLog=1.
+                    // Deposit test (auto-store): Ctrl+F11 with DebugLog=1, in test builds only.
+                    // A release leaves it out, because players set DebugLog=1 to send a log.
                     static bool probeWas = false;
                     const bool down = front && v.debugLog && mods == Settings::kModCtrl && KeyDown(VK_F11);
                     if (down && !probeWas && !paused) deposit::DebugNextBagStack();
                     probeWas = down;
                 }
+#endif
                 for (int i = 0; i < Settings::kStorages; ++i)
                 {
                     const Settings::PadBind& p = v.pad[i];

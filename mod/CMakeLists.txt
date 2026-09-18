@@ -49,6 +49,15 @@ target_link_libraries(PrivateStorageMaster PRIVATE minhook)
 target_compile_definitions(PrivateStorageMaster PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
 target_compile_options(PrivateStorageMaster PRIVATE /utf-8 /W3 /EHsc)
 
+# Ctrl+F11 with DebugLog=1 deposits half of the next bag stack, to test the
+# auto-store path without Master Looter. Test builds only: players set
+# DebugLog=1 to send a log, and a release must not move items on a key they
+# never bound. Configure with -DPSM_DEPOSIT_TEST_KEY=ON to get it.
+option(PSM_DEPOSIT_TEST_KEY "Ctrl+F11 deposit test key" OFF)
+if(PSM_DEPOSIT_TEST_KEY)
+    target_compile_definitions(PrivateStorageMaster PRIVATE PSM_DEPOSIT_TEST_KEY)
+endif()
+
 set_target_properties(PrivateStorageMaster PROPERTIES PREFIX "" SUFFIX ".asi" OUTPUT_NAME "PrivateStorageMaster")
 
 if(MSVC)
