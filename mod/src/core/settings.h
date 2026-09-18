@@ -40,7 +40,7 @@ namespace psm::Settings
     // Camp Provisions holds packaged trade goods, and the bag's move to it converts
     // them, so it is never a place loot is stored.
     inline constexpr int kTownWarehouse = 7;
-    inline constexpr int kNeverMoveMax = 32;
+    inline constexpr int kNeverMoveMax = 64;
 
     struct Values
     {
@@ -74,10 +74,13 @@ namespace psm::Settings
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;
-        // Item numbers. 1980 is silver; 1981 to 1988 are the copper and silver
-        // pouches, which Private Storage would otherwise take.
-        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988};
-        int autoStoreNeverMoveCount = 9;
+        // Item numbers. Every currency in the game data: silver (1980), the copper
+        // and silver pouches (1981 to 1988), gold bars, camp funds and supplies,
+        // Kuku currencies (to 1999), faction contributions, refinement tokens,
+        // Marni tokens and the Hernand Bond (2003 to 2018). Private Storage would
+        // otherwise take them.
+        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018};
+        int autoStoreNeverMoveCount = 36;
     };
 
     void Load();                  // once, at startup

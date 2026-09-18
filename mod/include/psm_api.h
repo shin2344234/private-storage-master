@@ -142,6 +142,16 @@ PSM_API int         PsmGetAutoStore(PsmAutoStore* out, int defaults);
 /* Applies at once and saves the ini. 0 with a reason in why. */
 PSM_API int         PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen);
 
+/* AutoStoreNeverMove: item numbers auto-store never moves. The default is every
+ * currency (silver, the pouches, gold bars, camp funds, tokens and the rest). */
+#define PSM_NEVER_MOVE_MAX 64
+/* Copies the live list, or the default when defaults is nonzero, into items.
+ * Returns how many were copied, at most max. */
+PSM_API int         PsmGetNeverMove(uint16_t* items, int max, int defaults);
+/* Replaces the list, sorted and without repeats, and saves the ini. count may be
+ * 0 to move everything. 0 with a reason in why when count is over the maximum. */
+PSM_API int         PsmApplyNeverMove(const uint16_t* items, int count, char* why, int whyLen);
+
 /* Any thread. 1 when queued; 0 when auto-store is off, this game version lacks
  * the move, or the queue is full. */
 PSM_API int         PsmDeposit(uint16_t item, int64_t gained);

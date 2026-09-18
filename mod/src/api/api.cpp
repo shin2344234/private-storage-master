@@ -207,6 +207,44 @@ PSM_EXPORT int PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen)
     return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }
 
+static_assert(PSM_NEVER_MOVE_MAX == psm::Settings::kNeverMoveMax, "PSM_NEVER_MOVE_MAX and Settings::kNeverMoveMax must match");
+
+PSM_EXPORT int PsmGetNeverMove(uint16_t* items, int max, int defaults)
+{
+    if (!items || max <= 0) return 0;
+    const Values v = defaults ? psm::Settings::Defaults() : psm::Settings::Get();
+    const int n = v.autoStoreNeverMoveCount < max ? v.autoStoreNeverMoveCount : max;
+    memcpy(items, v.autoStoreNeverMove, sizeof(uint16_t) * n);
+    return n;
+}
+
+PSM_EXPORT int PsmApplyNeverMove(const uint16_t* items, int count, char* why, int whyLen)
+{
+    if (why && whyLen > 0) why[0] = 0;
+    if (count < 0 || count > PSM_NEVER_MOVE_MAX || (count > 0 && !items))
+    {
+        if (why && whyLen > 0) snprintf(why, whyLen, "%d items; the list holds at most %d", count, PSM_NEVER_MOVE_MAX);
+        return 0;
+    }
+    uint16_t sorted[PSM_NEVER_MOVE_MAX];
+    int n = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        if (items[i] == 0xFFFF) continue;
+        // Insertion into a sorted list, dropping repeats, so the ini can write runs as ranges.
+        int at = 0;
+        while (at < n && sorted[at] < items[i]) ++at;
+        if (at < n && sorted[at] == items[i]) continue;
+        memmove(sorted + at + 1, sorted + at, sizeof(uint16_t) * (n - at));
+        sorted[at] = items[i];
+        ++n;
+    }
+    Values v = psm::Settings::Get();
+    memcpy(v.autoStoreNeverMove, sorted, sizeof(uint16_t) * n);
+    v.autoStoreNeverMoveCount = n;
+    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+}
+
 PSM_EXPORT int PsmDeposit(uint16_t item, int64_t gained) { return psm::deposit::Queue(item, gained) ? 1 : 0; }
 
 PSM_EXPORT int PsmDepositResults(PsmDepositResult* out, int max)

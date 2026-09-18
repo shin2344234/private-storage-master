@@ -312,26 +312,34 @@ namespace psm::Settings
                     v.autoStore ? 1 : 0);
             for (int i = 0; i < kStorages; ++i)
                 if (i != kTownWarehouse) fprintf(f, "AutoStore%s=%d\n", kInfo[i].key, v.autoStoreTo[i] ? 1 : 0);
+            // Runs of three or more consecutive numbers are written as a range.
             char never[kNeverMoveMax * 7] = "";
-            for (int i = 0; i < v.autoStoreNeverMoveCount; ++i)
+            for (int i = 0; i < v.autoStoreNeverMoveCount;)
             {
-                char one[8];
-                snprintf(one, sizeof one, i ? ",%u" : "%u", v.autoStoreNeverMove[i]);
+                int end = i;
+                while (end + 1 < v.autoStoreNeverMoveCount && v.autoStoreNeverMove[end + 1] == v.autoStoreNeverMove[end] + 1) ++end;
+                char one[16];
+                if (end - i >= 2) snprintf(one, sizeof one, "%s%u-%u", never[0] ? "," : "", v.autoStoreNeverMove[i], v.autoStoreNeverMove[end]);
+                else { end = i; snprintf(one, sizeof one, "%s%u", never[0] ? "," : "", v.autoStoreNeverMove[i]); }
                 strcat_s(never, one);
+                i = end + 1;
             }
             fprintf(f,
                     "\n; 1 moves only the amount you just picked up, so food and potions you were\n"
                     "; already carrying stay in your bag. 0 moves the whole stack.\n"
                     "AutoStoreOnlyGained=%d\n\n"
-                    "; Item numbers that never move, separated by commas. 1980 is silver, and 1981\n"
-                    "; to 1988 are the copper and silver pouches.\n"
+                    "; Item numbers that never move, separated by commas, with ranges written as\n"
+                    "; 1980-1999. The default is every currency: silver, the copper and silver\n"
+                    "; pouches, gold bars, camp funds and supplies, Kuku currencies, faction\n"
+                    "; contributions, refinement tokens, Marni tokens and the Hernand Bond.\n"
                     "AutoStoreNeverMove=%s\n",
                     v.autoStoreOnlyGained ? 1 : 0, never);
             fclose(f);
             return true;
         }
 
-        // "1980, 2001": item numbers, up to kNeverMoveMax. An empty value clears the list.
+        // "1980-1999, 2003": item numbers and ranges, up to kNeverMoveMax numbers.
+        // An empty value clears the list.
         void ParseItemList(const char* val, Values& out)
         {
             out.autoStoreNeverMoveCount = 0;
@@ -343,8 +351,16 @@ namespace psm::Settings
                 char* end = nullptr;
                 const unsigned long n = strtoul(p, &end, 10);
                 if (end == p) { LOG_ERR("[settings] AutoStoreNeverMove=%s has something that is not an item number; the rest is ignored", val); break; }
-                if (n < 0xFFFF) out.autoStoreNeverMove[out.autoStoreNeverMoveCount++] = static_cast<uint16_t>(n);
+                unsigned long last = n;
                 p = end;
+                if (*p == '-')
+                {
+                    last = strtoul(p + 1, &end, 10);
+                    if (end == p + 1 || last < n) { LOG_ERR("[settings] AutoStoreNeverMove=%s has a range that does not read; the rest is ignored", val); break; }
+                    p = end;
+                }
+                for (unsigned long k = n; k <= last && k < 0xFFFF && out.autoStoreNeverMoveCount < kNeverMoveMax; ++k)
+                    out.autoStoreNeverMove[out.autoStoreNeverMoveCount++] = static_cast<uint16_t>(k);
             }
         }
 
