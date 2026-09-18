@@ -418,9 +418,10 @@ namespace psm::Settings
         void LogValues(const Values& v)
         {
             char a[64], b[64];
+            // The line per storage is DebugLog only; the summary below always goes out.
             for (int i = 0; i < kStorages; ++i)
-                LOG_NOTE("[settings] %-15s key %-12s pad %-10s slots %d", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b),
-                         v.slots[i]);
+                LOG("[settings] %-15s key %-12s pad %-10s slots %d", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b),
+                    v.slots[i]);
             LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d PrivateStorageExpansions=%d", v.enabled ? 1 : 0,
                      v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a), v.leaveCapacityAlone ? 1 : 0, v.privateStorageExpansions);
         }

@@ -94,6 +94,16 @@ namespace psm::Log
         MoveFileExW(Paths::File(live).c_str(), Paths::File(to).c_str(), MOVEFILE_REPLACE_EXISTING);
     }
 
+    void Prune(const wchar_t* base, int keep)
+    {
+        wchar_t name[96];
+        for (int i = keep + 1; i <= kArchives; ++i)
+        {
+            _snwprintf_s(name, _countof(name), _TRUNCATE, L"%s.%02d.log", base, i);
+            DeleteFileW(Paths::File(name).c_str());
+        }
+    }
+
     void Claim(const wchar_t* base)
     {
         std::lock_guard<std::mutex> lk(g_mu);

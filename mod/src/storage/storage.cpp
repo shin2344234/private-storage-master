@@ -561,7 +561,7 @@ namespace psm::storage
             g_hwnd = h;
             if (!prev) { LOG_ERR("[keys] could not take the game window's keys (%lu); keyboard bindings do not work", GetLastError()); return; }
             g_oldProc = reinterpret_cast<WNDPROC>(prev);
-            LOG_NOTE("[keys] hiding bound keys from the game window %p", static_cast<void*>(h));
+            LOG("[keys] hiding bound keys from the game window %p", static_cast<void*>(h));
         }
 
         void RestoreGameWindow()

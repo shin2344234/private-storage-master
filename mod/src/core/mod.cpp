@@ -20,6 +20,10 @@ namespace
     DWORD WINAPI Worker(LPVOID)
     {
         psm::Settings::Load();
+        // Twenty-four archived sessions are for chasing a problem. Without
+        // DebugLog a session is a handful of lines, and the last two are all a
+        // report needs, including the one before a crash and a relaunch.
+        if (!psm::Log::Debug()) psm::Log::Prune(PSM_FILEBASE, 2);
         LOG_NOTE("[mod] %s %s for Crimson Desert %s, game image at 0x%p, %zu bytes", PSM_NAME, PSM_VERSION, PSM_GAME,
                  reinterpret_cast<void*>(psm::mem::Game().base), psm::mem::Game().size);
         if (!psm::Settings::Get().enabled)

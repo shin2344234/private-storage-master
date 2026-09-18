@@ -18,6 +18,10 @@ namespace psm::Log
     // three hooks failing when all five had installed. Whoever is not the game
     // gets its own name and never touches the real log.
     void Claim(const wchar_t* base);
+    // Deletes archived sessions past the newest `keep`. Claim keeps them all
+    // because it runs before the ini is read; the caller prunes once it knows
+    // DebugLog is off.
+    void Prune(const wchar_t* base, int keep);
     bool Claimed();
     void Shutdown();
     void Snapshot(std::vector<std::string>& out, int maxLines);

@@ -333,16 +333,23 @@ namespace psm::capacity
 
         void FlushLog()
         {
+            // A line per storage with DebugLog=1, one line for all of them without.
+            int fresh = 0;
             for (Target& t : g_targets)
             {
                 const int p = t.patches.load();
                 if (!t.seen.load() || p == t.logged) continue;
                 if (!t.logged)
-                    LOG_NOTE("[capacity] %s: default %u -> %u, max %u -> %u", t.name, t.stockDefault, t.newDefault, t.stockMax, t.newMax);
+                {
+                    LOG("[capacity] %s: default %u -> %u, max %u -> %u", t.name, t.stockDefault, t.newDefault, t.stockMax, t.newMax);
+                    ++fresh;
+                }
                 else
                     LOG("[capacity] %s read again by the game and set again (%d times)", t.name, p);
                 t.logged = p;
             }
+            if (fresh && !Log::Debug())
+                LOG_NOTE("[capacity] sizes set for %d storage%s; DebugLog=1 lists each one", fresh, fresh == 1 ? "" : "s");
         }
 
         // ------------------------------------------------------------ size table for Master Looter
