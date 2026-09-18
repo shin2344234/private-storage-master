@@ -390,6 +390,7 @@ namespace psm::capacity
             uint16_t item, slot, bagIndex, targetIndex;
             int64_t bagBefore;
             uint32_t targetBefore;
+            int64_t itemBefore;      // how many of the item the target held, so a merge into a stack shows
             char target[40];
         } g_probeMove{};
 
@@ -482,6 +483,25 @@ namespace psm::capacity
                    mem::Read8(s + 0xA1, locked) && mem::Read64(s, instance);
         }
 
+        // Every slot of a storage that holds this item, summed. A stack that joins one
+        // already there leaves the used count alone, so this is the only way to see it.
+        int64_t ItemTotal(uintptr_t bucket, uint16_t want)
+        {
+            uint32_t size = 0;
+            if (!bucket || !mem::Read32(bucket + 0x08, &size)) return -1;
+            size &= 0xFFFF;
+            int64_t total = 0;
+            for (uint32_t k = 0; k < size; ++k)
+            {
+                uint16_t item = 0xFFFF, variant = 0;
+                int64_t count = 0;
+                uint8_t locked = 0;
+                uint64_t instance = 0;
+                if (SlotAt(bucket, k, &item, &variant, &count, &locked, &instance) && item == want && count > 0) total += count;
+            }
+            return total;
+        }
+
         bool CallMove(uintptr_t fn, uintptr_t holder, uint32_t* err, uint32_t actor, uint16_t item, uint16_t variant, uint64_t count,
                       uint16_t from, uint16_t slot, uint32_t moveIndex)
         {
@@ -533,6 +553,7 @@ namespace psm::capacity
                 if (idx < 0) { LOG_NOTE("[probe]   %-26s no such record", name); continue; }
                 const uintptr_t bucket = BucketByIndex(holder, static_cast<uint16_t>(idx));
                 const Bucket before = bucket ? ReadBucket(bucket, true) : Bucket{};
+                const int64_t itemBefore = ItemTotal(bucket, item);
                 const int mi = MoveIndex(bagRecord, static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(idx));
                 if (!bucket || mi < 0) { LOG_NOTE("[probe]   %-26s skipped (bucket %s, move entry %d)", name, bucket ? "yes" : "no", mi); continue; }
                 uint32_t err = 0xFFFFFFFF;
@@ -545,7 +566,7 @@ namespace psm::capacity
                 LOG_NOTE("[probe]   %-26s move entry %2d, %u of %d used: %s (0x%08X)", name, mi, before.filled, before.cap, ErrName(err), err);
                 if (err == 0)
                 {
-                    g_probeMove = ProbeMove{item, static_cast<uint16_t>(slot), static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(idx), count, before.filled, {}};
+                    g_probeMove = ProbeMove{item, static_cast<uint16_t>(slot), static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(idx), count, before.filled, itemBefore, {}};
                     strncpy_s(g_probeMove.target, name, _TRUNCATE);
                     g_probeCheckAt = GetTickCount() + 500;
                     return;
@@ -569,6 +590,14 @@ namespace psm::capacity
             LOG_NOTE("[probe] 500 ms later: bag slot %u holds item %u count %lld (was item %u count %lld); %s has %u used (was %u)",
                      g_probeMove.slot, slotRead ? item : 0xFFFF, static_cast<long long>(slotRead ? count : 0), g_probeMove.item,
                      static_cast<long long>(g_probeMove.bagBefore), g_probeMove.target, after.filled, g_probeMove.targetBefore);
+            const int64_t itemAfter = ItemTotal(target, g_probeMove.item);
+            const int64_t gained = itemAfter - g_probeMove.itemBefore;
+            LOG_NOTE("[probe]   item %u in %s: %lld before, %lld after, %+lld; the stack was %lld, so the move %s",
+                     g_probeMove.item, g_probeMove.target, static_cast<long long>(g_probeMove.itemBefore), static_cast<long long>(itemAfter),
+                     static_cast<long long>(gained), static_cast<long long>(g_probeMove.bagBefore),
+                     g_probeMove.itemBefore < 0 || itemAfter < 0 ? "could not be counted"
+                     : gained == g_probeMove.bagBefore ? "arrived whole"
+                     : gained == 0 ? "did not arrive" : "arrived in part");
         }
 
         void RefreshSizes()
