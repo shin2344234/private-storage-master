@@ -140,6 +140,7 @@ namespace psm::storage
         // Published by Tick for the capacity worker, which runs on its own thread.
         std::atomic<bool>  g_freePlay{false};
         std::atomic<DWORD> g_lastTick{0};
+        std::atomic<bool>  g_hidingKeys{false};   // published by the poller for PsmHidingKeys
         bool Paused() { return static_cast<int32_t>(g_pauseUntil.load() - GetTickCount()) > 0; }
 
         void* oHandler = nullptr, *oModeSwitch = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr;
@@ -736,6 +737,7 @@ namespace psm::storage
                     if (KeyDown(VK_SHIFT)) mods |= Settings::kModShift;
                     if (KeyDown(VK_MENU)) mods |= Settings::kModAlt;
                 }
+                g_hidingKeys.store(v.hideKeysWithModifier && ModsInUse(mods), std::memory_order_relaxed);
                 for (int i = 0; i <= Settings::kStorages + 1; ++i)
                 {
                     const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : i == Settings::kStorages ? v.dumpKey : v.hideKeysToggleKey;
@@ -775,6 +777,7 @@ namespace psm::storage
                     was[i] = down;
                 }
             }
+            g_hidingKeys = false;
             return 0;
         }
 
@@ -839,6 +842,7 @@ namespace psm::storage
     }
     int OpenStorage() { return g_open.load() ? g_openChest.load() : -1; }
     void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount() + ms; }
+    bool HidingKeys() { return g_hidingKeys.load(std::memory_order_relaxed); }
 
     Play PlayState()
     {

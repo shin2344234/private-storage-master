@@ -100,6 +100,25 @@ PSM_API void        PsmPauseInput(uint32_t ms);
 /* A size that is not a setting (the Collectibles Chest), or 0. Added after
  * interface 1 shipped to Master Looter, so look it up as optional. */
 PSM_API int         PsmFixedSlots(int storage);
+/* 1 while keys are held back from the game: HideKeysWithModifier is on and a
+ * modifier some binding uses is down. Any thread, no lock, no logging, and it
+ * lags the keyboard by up to one poll (16 ms). Optional, look it up by name. */
+PSM_API int         PsmHidingKeys(void);
+
+/* HideKeysWithModifier and its toggle key. They came after PsmSettings shipped,
+ * which cannot grow, so they have their own struct and calls. Optional, look
+ * them up by name. */
+typedef struct PsmKeyBlock
+{
+    uint32_t size;                          /* sizeof(PsmKeyBlock) */
+    int32_t  on;                            /* HideKeysWithModifier */
+    PsmKey   toggleKey;                     /* HideKeysToggleKey, vk 0 for none */
+} PsmKeyBlock;
+/* The live values, or the defaults when defaults is nonzero. */
+PSM_API int         PsmGetKeyBlock(PsmKeyBlock* out, int defaults);
+/* Applies at once and saves the ini. 0 with a reason in why. A toggle key
+ * that clashes with another binding is turned off; read it back to see. */
+PSM_API int         PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLen);
 /* "Ctrl+F1", "LB+LS", "None". */
 PSM_API int         PsmKeyText(PsmKey key, char* out, int outLen);
 PSM_API int         PsmPadText(PsmPad pad, char* out, int outLen);

@@ -18,6 +18,10 @@ namespace psm::storage
     // Master Looter calls this every frame its menu has the mouse, so rebinding
     // Ctrl+F1 there does not also open Private Storage. It lapses on its own.
     void PauseInput(unsigned ms);
+    // Whether keys are being held back from the game right now: the block is on
+    // and a modifier some binding uses is down. Master Looter asks it from its
+    // render and loot threads, so it is one atomic read, set by the poller.
+    bool HidingKeys();
 
     // Whether the player was in free play on the last frame. Unknown when the
     // storage hooks are not in, since the frame tick is what reads it. NotFree

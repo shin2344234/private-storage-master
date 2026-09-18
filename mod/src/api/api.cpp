@@ -147,6 +147,33 @@ PSM_EXPORT int PsmFixedSlots(int storage)
 
 PSM_EXPORT void PsmPauseInput(uint32_t ms) { psm::storage::PauseInput(ms > 2000 ? 2000 : ms); }
 
+PSM_EXPORT int PsmHidingKeys(void) { return psm::storage::HidingKeys() ? 1 : 0; }
+
+PSM_EXPORT int PsmGetKeyBlock(PsmKeyBlock* out, int defaults)
+{
+    if (!out || out->size != sizeof *out) return 0;
+    const Values v = defaults ? psm::Settings::Defaults() : psm::Settings::Get();
+    memset(out, 0, sizeof *out);
+    out->size = sizeof *out;
+    out->on = v.hideKeysWithModifier;
+    out->toggleKey = {v.hideKeysToggleKey.vk, v.hideKeysToggleKey.mods};
+    return 1;
+}
+
+PSM_EXPORT int PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLen)
+{
+    if (why && whyLen > 0) why[0] = 0;
+    if (!in || in->size != sizeof *in)
+    {
+        if (why && whyLen > 0) snprintf(why, whyLen, "key block struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
+        return 0;
+    }
+    Values v = psm::Settings::Get();
+    v.hideKeysWithModifier = in->on != 0;
+    v.hideKeysToggleKey = {in->toggleKey.vk, static_cast<uint8_t>(in->toggleKey.mods & 7)};
+    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+}
+
 PSM_EXPORT int PsmKeyText(PsmKey key, char* out, int outLen)
 {
     if (!out || outLen <= 0) return 0;
