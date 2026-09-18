@@ -1,8 +1,8 @@
-Private Storage Master 1.0.1 for Crimson Desert 2.02.00 and 2.03.00
+Private Storage Master 1.1.0 for Crimson Desert 2.02.00 and 2.03.00
 ===================================================================
 
-Opens storage from anywhere in the game's own warehouse screen and sets each
-storage's size.
+Opens storage from anywhere in the game's own warehouse screen, sets each
+storage's size, and with Master Looter puts your loot straight into storage.
 
 Install
 -------
@@ -17,6 +17,55 @@ Install
 The first launch writes PrivateStorageMaster.ini beside the plugin with every
 setting explained. To uninstall, delete the PrivateStorageMaster files from
 bin64; storage sizes go back to the game's on the next start.
+
+Loot straight into storage
+--------------------------
+
+New in 1.1.0. With Master Looter 1.6.28 or later installed as well, what
+Master Looter picks up for you goes into your storage on its own: ore and
+plants to the Gatherables Chest, food to the Kuku Cooler, collectibles to the
+Collectibles Chest, Abyss gear to its storage. It is off until you turn it on.
+
+To turn it on, open the Master Looter menu (Insert by default), go to the
+Storage tab and tick "Put what Master Looter picks up into storage" under
+Store loot. AutoStore=1 in PrivateStorageMaster.ini does the same.
+
+Each item goes to the first storage in this list that is ticked and takes it:
+
+    Collectibles Chest     one of each collectible, only when it has none yet
+    Abyss gear storage
+    Gatherables Chest
+    Kuku Cooler
+    Bird Feed
+    Camp Straw             also takes teas and cooked food
+    Wardrobe               off by default, so new gear stays with you
+    Private Storage        off by default, since it takes almost anything
+
+Camp Provisions holds trade goods only and never receives loot. The game's
+own rules decide what each storage takes, and anything none of them takes
+stays in your bag. A full storage is skipped and the next one is tried.
+
+Only what was just picked up moves. If you carry 20 bread and Master Looter
+picks up 5, the 5 go to the Kuku Cooler and your 20 stay. Untick "Only move
+what was picked up" (AutoStoreOnlyGained=0) to move the whole stack.
+
+Never moved:
+- Money and every other currency: copper, silver, the pouches, gold bars,
+  camp funds, tokens and the rest. The Never move list on the Storage tab
+  (AutoStoreNeverMove in the ini) holds up to 64 items and you can add or
+  remove any of them.
+- Anything you pick up or gather by hand, buy, craft, or take out of a storage.
+- Quest items and documents.
+- Anything while a storage or menu is open, or in a cutscene or load, and for
+  a moment after a menu closes.
+
+Each time something is stored, a notice such as "Stored 3 items: Kuku Cooler
+3" comes up. "Show a notice when loot is stored" on the same tab turns it off.
+
+Needs: Master Looter 1.6.28 or later, this plugin 1.1.0 or later, and Master
+Looter looting (auto-loot on, or its loot-everything key). With an older
+Master Looter nothing happens; with an older Private Storage Master the tab
+says "Storing loot needs a newer Private Storage Master."
 
 Keys
 ----
@@ -40,9 +89,10 @@ Holding Ctrl keeps other keys from the game, so a slip off a storage key does
 not fire a skill. W, A, S, D and the arrows get through all the same, and so do
 the keys the game uses with Ctrl itself. Holding Ctrl is Examine, which reads
 Q, E, R and T, so talking and trading with an NPC on Ctrl+E and Ctrl+R still
-work. Z is the guard's weapon swap, and Shift and + are the other two. Ctrl is also the game's guard and lock-on key, so any other key
-pressed while guarding is held back. Ctrl+F10 turns it off and on and saves the
-choice; HideKeysWithModifier and HideKeysToggleKey in the ini set the same thing.
+work. Z is the guard's weapon swap, and Shift and + are the other two. Ctrl is
+also the game's guard and lock-on key, so any other key pressed while guarding
+is held back. Ctrl+F10 turns it off and on and saves the choice;
+HideKeysWithModifier and HideKeysToggleKey in the ini set the same thing.
 
 Sizes
 -----
@@ -53,14 +103,17 @@ would. PrivateStorageSlots is a total that includes bought expansions. The
 Collectibles Chest is always 958. LeaveCapacityAlone=1 turns every size off,
 for use with JSON capacity mods.
 
-With Master Looter installed, its menu has a Storage tab for all of this.
+With Master Looter installed, its menu has a Storage tab for all of this,
+loot storing included.
 
 Reporting a problem
 -------------------
 
 Set DebugLog=1, play until it happens, close the game and attach
 PrivateStorageMaster.log from bin64. The two sessions before it are kept as
-PrivateStorageMaster.01.log and .02.log, or the last 24 with DebugLog=1.
+PrivateStorageMaster.01.log and .02.log, or the last 24 with DebugLog=1. For
+loot storing, attach MasterLooter.log too; with DebugLog=1 every item moved
+or left in the bag is in PrivateStorageMaster.log with the reason.
 
 Building
 --------

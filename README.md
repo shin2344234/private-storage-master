@@ -5,6 +5,14 @@ camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
 Crimson Desert 2.02.00 and 2.03.00.
 
+New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/3402)
+1.6.28 or later installed too, what Master Looter picks up goes straight into
+your storage. Ore and plants go to the Gatherables Chest, food to the Kuku
+Cooler, collectibles to the Collectibles Chest. Only what was just picked up
+moves and money stays with you. It is off until you tick "Put what Master
+Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
+needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
+
 It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 2.0 by jkiip. It was written from scratch and contains no code from either; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -12,7 +20,8 @@ It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 - Download and full description: [Nexus Mods](https://www.nexusmods.com/crimsondesert/mods/3521)
 - Install, keys, settings and building: [mod/README.md](mod/README.md)
 - For other plugins: [mod/include/psm_api.h](mod/include/psm_api.h) is the
-  versioned C interface Master Looter's Storage tab uses.
+  versioned C interface Master Looter's Storage tab uses, including
+  PsmDeposit, PsmDepositResults and PsmFreePlay for loot storing.
 
 ## Antivirus
 
@@ -20,15 +29,17 @@ A scanner or two may flag the plugin, because the shape of what it does looks
 like a trainer to a model: it is a DLL loaded into the game that searches the
 game's code for byte patterns, writes jumps over five of its functions, swaps
 the game's XInput import for a filter and reads the keyboard and pad first. It
-imports only kernel32 and user32, so there is no network code in it, it touches
-no registry key, game file or save, and every line is here to read or build
-yourself.
+imports only kernel32 and user32, so there is no network code in it, and it
+touches no registry key or game file. It never edits your save; with loot
+storing on it asks the game to move items the way the warehouse screen does,
+and the game saves that as it would any move. Every line is here to read or
+build yourself.
 
-SHA-256 for 1.0.1:
+SHA-256 for 1.1.0:
 
-    3f99caef392ce5c99f502a0c4289ec64e3ce2bfefbd158f63164cb9ae7ce3297  PrivateStorageMaster-1.0.1-DMM.zip
-    dd929a21ba0cb94d3e9b55818041d8affd22da08324a284f01af3f3dea7d030a  PrivateStorageMaster-1.0.1.zip
-    a4dd080a7064b964671f84649ed51c19c68b5d1ccb872ae32da65ef15fdd3fa1  PrivateStorageMaster.asi
+    b1d99b6046128d8af714886c6e453698a5805a453e6d8033630cdb177f7b9be4  PrivateStorageMaster-1.1.0-DMM.zip
+    311a5fe20ddc18e862c863bc5c0572fc20301f590c13596f30a18c222360261c  PrivateStorageMaster-1.1.0.zip
+    639ae21424a1795964ef0942b6193ef1ab94b2689ce95cae7c61175e2fe20fe9  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
