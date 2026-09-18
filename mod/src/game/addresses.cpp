@@ -70,7 +70,9 @@ namespace psm::addr
         // Every UIEventManager wrap is registered by the same four instructions,
         // so the pattern below matches once per wrap, 346 times on 2.02 and 347
         // on 2.03. The name passed a few instructions later is what picks ours
-        // out of them.
+        // out of them, and like every other anchor here it has to pick exactly
+        // one. A build that registered the name twice would otherwise hand back
+        // whichever came first.
         //
         //   lea  rcx, [rsi + slot]        <- the offset wanted, at +3
         //   call ...
@@ -80,15 +82,16 @@ namespace psm::addr
         const char* const kWrapRegister =
             "48 8D 8E ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 89 78 10 41 B8 01 00 00 00 48 8D 15 ?? ?? ?? ??";
 
-        bool IsStageChartWrap(uintptr_t hit, void* ctx)
+        struct WrapSearch { int named; uintptr_t hit; };
+
+        bool CountStageChartWraps(uintptr_t hit, void* ctx)
         {
             char name[64];
             if (!mem::ReadCString(mem::RipAt(hit + 22, 7), name, sizeof name)) return false;
             if (strcmp(name, "StageChartUIControl") != 0) return false;
-            uint32_t slot = 0;
-            if (!mem::Read32(hit + 3, &slot) || slot < 0x100 || slot > 0x4000 || (slot & 7)) return false;
-            *static_cast<unsigned*>(ctx) = static_cast<unsigned>(slot);
-            return true;
+            auto* w = static_cast<WrapSearch*>(ctx);
+            if (!w->named++) w->hit = hit;
+            return w->named >= 2;   // a second one already fails the search, so stop scanning
         }
     }
 
@@ -160,10 +163,19 @@ namespace psm::addr
         // The StageChartUIControl wrap's slot in UIEventManager, 0x9A8 on 2850
         // and 0x9B0 on 2944 because 2944 inserted one wrap ahead of it and
         // pushed every later slot up by eight.
-        if (mem::FindIf(kWrapRegister, IsStageChartWrap, &s.eventWrapOff))
-            LOG("[addr] StageChartUIControl wrap at UIEventManager+0x%X", s.eventWrapOff);
+        WrapSearch wrap{};
+        mem::FindIf(kWrapRegister, CountStageChartWraps, &wrap);
+        uint32_t slot = 0;
+        if (wrap.named != 1)
+            LOG_ERR("[addr] %s UIEventManager slot registers a wrap named StageChartUIControl, expected one",
+                    wrap.named ? "more than one" : "no");
+        else if (!mem::Read32(wrap.hit + 3, &slot) || slot < 0x100 || slot > 0x4000 || (slot & 7))
+            LOG_ERR("[addr] the StageChartUIControl wrap registration at +%llX gives an implausible slot", R(wrap.hit));
         else
-            LOG_ERR("[addr] no UIEventManager slot registers a wrap named StageChartUIControl");
+        {
+            s.eventWrapOff = slot;
+            LOG("[addr] StageChartUIControl wrap at UIEventManager+0x%X", slot);
+        }
 
         return s.eventPost && s.requestPhase && s.modeSwitch && s.stageClose && s.inputBlockSet && s.eventManagerGlobal &&
                s.actorManagerGlobal && s.warehouseVtable && s.eventWrapVtable && s.stageMgrVtable && s.warehouseHandler &&
