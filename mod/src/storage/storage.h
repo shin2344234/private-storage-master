@@ -18,4 +18,10 @@ namespace psm::storage
     // Master Looter calls this every frame its menu has the mouse, so rebinding
     // Ctrl+F1 there does not also open Private Storage. It lapses on its own.
     void PauseInput(unsigned ms);
+
+    // Whether the player was in free play on the last frame. Unknown when the
+    // storage hooks are not in, since the frame tick is what reads it. NotFree
+    // when no frame has run for a second, which is a load, a hang or shutdown.
+    enum class Play { Unknown, Free, NotFree };
+    Play PlayState();
 }

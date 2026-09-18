@@ -137,6 +137,9 @@ namespace psm::storage
         constexpr DWORD kReopenCooldownMs = 250;
         std::atomic<DWORD> g_pauseUntil{0};
         std::atomic<bool> g_ready{false};
+        // Published by Tick for the capacity worker, which runs on its own thread.
+        std::atomic<bool>  g_freePlay{false};
+        std::atomic<DWORD> g_lastTick{0};
         bool Paused() { return static_cast<int32_t>(g_pauseUntil.load() - GetTickCount()) > 0; }
 
         void* oHandler = nullptr, *oModeSwitch = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr;
@@ -333,6 +336,8 @@ namespace psm::storage
             uint8_t mode = 0, screen = 0;
             mem::Read8(pm + 0x28, &mode);
             mem::Read8(pm + A.phaseScreenOff, &screen);
+            g_freePlay = mode == 4 && screen == kScreenIngame;
+            g_lastTick = GetTickCount();
 
             if (g_switchTo >= 0 && !g_open.load())
             {
@@ -702,6 +707,14 @@ namespace psm::storage
     bool KeyWindowFound() { return g_hwnd && g_oldProc && IsWindow(g_hwnd); }
     int OpenStorage() { return g_open.load() ? g_openChest.load() : -1; }
     void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount() + ms; }
+
+    Play PlayState()
+    {
+        if (!g_ready.load()) return Play::Unknown;
+        const DWORD last = g_lastTick.load();
+        if (!last || GetTickCount() - last > 1000) return Play::NotFree;
+        return g_freePlay.load() ? Play::Free : Play::NotFree;
+    }
 
     void Stop()
     {

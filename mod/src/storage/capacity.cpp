@@ -11,6 +11,7 @@
 #include "game/addresses.h"
 #include "game/farhook.h"
 #include "game/mem.h"
+#include "storage/storage.h"
 
 namespace psm::capacity
 {
@@ -55,21 +56,37 @@ namespace psm::capacity
 
         std::atomic<bool> g_patching{false};
         int g_privateExtras = 0;       // slots the save adds on top of the default, from the state file or the ini
+        // The most any save has added. The default is shared by every save, so it
+        // has to leave room for the biggest one or that save lands past the slot
+        // array. Never lowered by learning; PrivateStorageExpansions overrides it.
+        int g_privateExtrasMost = 0;
         bool g_extrasFromIni = false;
 
-        int ReadState()
+        int ReadStateKey(const char* key, int fallback)
         {
-            char v[32];
-            GetPrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtras", "0", v, sizeof v, Paths::FileUtf8(kStateFile).c_str());
+            char v[32], def[16];
+            snprintf(def, sizeof def, "%d", fallback);
+            GetPrivateProfileStringA("PrivateStorageMaster", key, def, v, sizeof v, Paths::FileUtf8(kStateFile).c_str());
             const int n = atoi(v);
-            return n >= 0 && n <= kSlotArray ? n : 0;
+            return n >= 0 && n <= kSlotArray ? n : fallback;
         }
 
-        void WriteState(int extras)
+        void ReadState()
         {
+            g_privateExtras = ReadStateKey("PrivateStorageExtras", 0);
+            // State files from 1.0.0 have only the key above.
+            const int most = ReadStateKey("PrivateStorageExtrasMost", g_privateExtras);
+            g_privateExtrasMost = most > g_privateExtras ? most : g_privateExtras;
+        }
+
+        void WriteState()
+        {
+            const std::string file = Paths::FileUtf8(kStateFile);
             char v[32];
-            snprintf(v, sizeof v, "%d", extras);
-            WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtras", v, Paths::FileUtf8(kStateFile).c_str());
+            snprintf(v, sizeof v, "%d", g_privateExtras);
+            WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtras", v, file.c_str());
+            snprintf(v, sizeof v, "%d", g_privateExtrasMost);
+            WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtrasMost", v, file.c_str());
         }
 
         // Sizes from the stock record, per R2 section 6: default and max move by the
@@ -85,8 +102,12 @@ namespace psm::capacity
             if (!t.wanted) return;
             const int slots = Settings::Startup().slots[t.storage];
             // Private Storage's setting is a total that counts expansions and story slots.
+            // The ceiling leaves room for the most any save has added rather than the
+            // last one: a single low reading used to lift the default so far that the
+            // next save's own extras went past the slot array (18 September, 2220 of
+            // 1460).
             int want = t.storage == 0 ? slots - g_privateExtras : slots;
-            const int ceiling = t.storage == 0 ? kSlotArray - g_privateExtras : kSlotArray;
+            const int ceiling = t.storage == 0 ? kSlotArray - g_privateExtrasMost : kSlotArray;
             if (want > ceiling) want = ceiling;
             if (want <= d) return;
             const int delta = want - d;
@@ -270,6 +291,12 @@ namespace psm::capacity
             // game's own size as the default plus these, and needs them either way.
             const Target& t = g_targets[0];
             if (g_extrasFromIni) return;
+            // Only readings taken in free play count, and the hold below has to be
+            // unbroken free play. At the title screen Private Storage can sit at its
+            // bare default for far longer than the hold: on 18 September a reading
+            // taken there saved 0 over a real 760.
+            const storage::Play play = storage::PlayState();
+            if (play == storage::Play::NotFree) { s_candidate = -1; s_agreed = 0; return; }
             Bucket b{};
             if (!FindBucket("CampWareHouse", b) || b.cap <= 0) return;
             const uintptr_t rec = RecordByName(t.name);
@@ -277,6 +304,11 @@ namespace psm::capacity
             if (!rec || !mem::Read16(rec + 0x48, &applied)) return;
             const int extras = b.cap - applied;
             if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) { s_candidate = -1; s_agreed = 0; return; }
+            // Without the storage hooks nothing says whether this is free play, so
+            // only ever raise the count. Too high a count sizes storage smaller,
+            // which is safe. Too low sizes it larger, and that is the direction that
+            // runs past the slot array.
+            if (play == storage::Play::Unknown && extras < g_privateExtras) { s_candidate = -1; s_agreed = 0; return; }
             // While a save loads, Private Storage sits at its default for several
             // seconds before the expansions are added back, and two reads two seconds
             // apart both saw 0 there. A count is kept once it has held for ten seconds,
@@ -286,14 +318,17 @@ namespace psm::capacity
             if (++s_agreed < need) return;
             s_candidate = -1;
             s_agreed = 0;
+            g_privateExtras = extras;
+            if (extras > g_privateExtrasMost) g_privateExtrasMost = extras;
+            // What Plan will give a save with this many extras on the next start.
             const int total = Settings::Startup().slots[0];
+            const int roomed = kSlotArray - g_privateExtrasMost + extras;
             if (t.wanted)
                 LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "
-                         "which will size it to %d.", b.cap, applied, extras, total < kSlotArray ? total : kSlotArray);
+                         "which will size it to %d.", b.cap, applied, extras, total < roomed ? total : roomed);
             else
                 LOG("[capacity] Private Storage has %d slots, %d of them from expansions and story", b.cap, extras);
-            WriteState(extras);
-            g_privateExtras = extras;
+            WriteState();
         }
 
         void FlushLog()
@@ -420,9 +455,10 @@ namespace psm::capacity
         if (v.privateStorageExpansions >= 0)
         {
             g_privateExtras = v.privateStorageExpansions < kSlotArray ? v.privateStorageExpansions : kSlotArray;
+            g_privateExtrasMost = g_privateExtras;   // the player said exactly; trust it
             g_extrasFromIni = true;
         }
-        else g_privateExtras = ReadState();
+        else ReadState();
 
         // The game can take a while to unpack its code; keep trying for a minute.
         bool resolved = false;
@@ -461,8 +497,13 @@ namespace psm::capacity
         g_hooked = true;
         PatchLoaded();
         if (v.slots[0] > 0)
+        {
             LOG_NOTE("[capacity] Private Storage target %d slots, counting %d from expansions and story (%s)", v.slots[0],
                      g_privateExtras, g_extrasFromIni ? "PrivateStorageExpansions" : "learned from the save last time");
+            if (g_privateExtrasMost > g_privateExtras)
+                LOG_NOTE("[capacity] Private Storage leaves room for %d extra slots, the most any save has had, so no save goes past the "
+                         "%d-slot array. Set PrivateStorageExpansions to override.", g_privateExtrasMost, kSlotArray);
+        }
         FlushLog();
     }
 
