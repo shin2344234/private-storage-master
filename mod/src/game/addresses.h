@@ -21,6 +21,10 @@ namespace psm::addr
         uintptr_t stageMgrVtable = 0;
         uintptr_t eventManagerGlobal = 0;
         uintptr_t actorManagerGlobal = 0;
+        // Two structure offsets that both moved between 1.0.0.2850 and
+        // 1.0.0.2944 and so are read out of the code rather than written down.
+        unsigned  phaseScreenOff = 0;   // phase manager + this = the current screen byte
+        unsigned  eventWrapOff = 0;     // UIEventManager + this = the StageChartUIControl wrap
     };
 
     struct Capacity

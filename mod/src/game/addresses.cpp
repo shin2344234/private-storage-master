@@ -66,6 +66,30 @@ namespace psm::addr
                 if (mem::MatchAt(from + i, pattern)) return true;
             return false;
         }
+
+        // Every UIEventManager wrap is registered by the same four instructions,
+        // so the pattern below matches once per wrap, 346 times on 2.02 and 347
+        // on 2.03. The name passed a few instructions later is what picks ours
+        // out of them.
+        //
+        //   lea  rcx, [rsi + slot]        <- the offset wanted, at +3
+        //   call ...
+        //   mov  [rax+0x10], r15
+        //   mov  r8d, 1
+        //   lea  rdx, [rip + name]        <- at +22, 7 bytes long
+        const char* const kWrapRegister =
+            "48 8D 8E ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 89 78 10 41 B8 01 00 00 00 48 8D 15 ?? ?? ?? ??";
+
+        bool IsStageChartWrap(uintptr_t hit, void* ctx)
+        {
+            char name[64];
+            if (!mem::ReadCString(mem::RipAt(hit + 22, 7), name, sizeof name)) return false;
+            if (strcmp(name, "StageChartUIControl") != 0) return false;
+            uint32_t slot = 0;
+            if (!mem::Read32(hit + 3, &slot) || slot < 0x100 || slot > 0x4000 || (slot & 7)) return false;
+            *static_cast<unsigned*>(ctx) = static_cast<unsigned>(slot);
+            return true;
+        }
     }
 
     bool ResolveStorage(Storage& s)
@@ -109,8 +133,41 @@ namespace psm::addr
             }
             else LOG_ERR("[addr] Warehouse2 slot 144 is not code");
         }
+
+        // The phase manager's current-screen byte. 2850 kept it at +0x29 and
+        // 2944 moved it to +0x2A, taking the whole tail of the structure with
+        // it, so a fixed offset reads a mode-adjacent byte instead and the open
+        // gate never passes. The mode at +0x28 did not move, and ModeSwitch
+        // reads the two together to build its mode tag, so the screen offset
+        // comes out of that instruction pair.
+        //   movzx r8d, byte [rbx + screen]   <- the offset wanted, at +4
+        //   movzx edx, byte [rbx + 0x28]
+        const uintptr_t screenRead = Unique("phase manager screen byte", "44 0F B6 43 ?? 0F B6 53 28");
+        if (screenRead)
+        {
+            uint8_t off = 0;
+            if (s.modeSwitch && (screenRead < s.modeSwitch || screenRead - s.modeSwitch > 0x1000))
+                LOG_ERR("[addr] screen byte: the read at +%llX is not inside ModeSwitch", R(screenRead));
+            else if (!mem::Read8(screenRead + 4, &off) || off <= 0x28 || off >= 0x40)
+                LOG_ERR("[addr] screen byte: +%llX gives an implausible offset", R(screenRead));
+            else
+            {
+                s.phaseScreenOff = off;
+                LOG("[addr] phase manager screen byte at +0x%02X", off);
+            }
+        }
+
+        // The StageChartUIControl wrap's slot in UIEventManager, 0x9A8 on 2850
+        // and 0x9B0 on 2944 because 2944 inserted one wrap ahead of it and
+        // pushed every later slot up by eight.
+        if (mem::FindIf(kWrapRegister, IsStageChartWrap, &s.eventWrapOff))
+            LOG("[addr] StageChartUIControl wrap at UIEventManager+0x%X", s.eventWrapOff);
+        else
+            LOG_ERR("[addr] no UIEventManager slot registers a wrap named StageChartUIControl");
+
         return s.eventPost && s.requestPhase && s.modeSwitch && s.stageClose && s.inputBlockSet && s.eventManagerGlobal &&
-               s.actorManagerGlobal && s.warehouseVtable && s.eventWrapVtable && s.stageMgrVtable && s.warehouseHandler;
+               s.actorManagerGlobal && s.warehouseVtable && s.eventWrapVtable && s.stageMgrVtable && s.warehouseHandler &&
+               s.phaseScreenOff && s.eventWrapOff;
     }
 
     bool ResolveCapacity(Capacity& c)

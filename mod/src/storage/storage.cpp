@@ -65,8 +65,11 @@ namespace psm::storage
 
         constexpr uint32_t kPlayerActor     = 0xA0100001;  // what every natural open carried
         constexpr uint8_t  kPhaseIngameMenu = 0x0E;
+        // Verified unchanged between 1.0.0.2850 and 1.0.0.2944: the screen name
+        // table is compared in the same order on both, with Ingame at index 16.
+        // The byte holding this value moved, not the value, so the offset is
+        // derived (A.phaseScreenOff) while the constant stays written down.
         constexpr uint8_t  kScreenIngame    = 0x10;
-        constexpr unsigned kEventMgrWrapOff = 0x9A8;       // UIEventManager + this = the StageChartUIControl wrap (R3A)
 
         struct Chest
         {
@@ -142,7 +145,7 @@ namespace psm::storage
         uintptr_t EventWrap()
         {
             uintptr_t mgr = 0, wrap = 0, vt = 0;
-            if (!mem::ReadPtr(A.eventManagerGlobal, &mgr) || !mem::ReadPtr(mgr + kEventMgrWrapOff, &wrap) || !mem::ReadPtr(wrap, &vt)) return 0;
+            if (!mem::ReadPtr(A.eventManagerGlobal, &mgr) || !mem::ReadPtr(mgr + A.eventWrapOff, &wrap) || !mem::ReadPtr(wrap, &vt)) return 0;
             return vt == A.eventWrapVtable ? wrap : 0;
         }
 
@@ -217,7 +220,7 @@ namespace psm::storage
             uint32_t queued = 0;
             uintptr_t proc = 0;
             mem::Read8(pm + 0x28, &mode);
-            mem::Read8(pm + 0x29, &screen);
+            mem::Read8(pm + A.phaseScreenOff, &screen);
             mem::Read32(pm + 0x70, &queued);
             if (mem::ReadPtr(pm + 0x10, &proc)) mem::Read8(proc + 0xA0, &blocked);
             snprintf(why, cap, "mode %u screen 0x%02X queued %u blocked %u", mode, screen, queued, blocked);
@@ -329,7 +332,7 @@ namespace psm::storage
 
             uint8_t mode = 0, screen = 0;
             mem::Read8(pm + 0x28, &mode);
-            mem::Read8(pm + 0x29, &screen);
+            mem::Read8(pm + A.phaseScreenOff, &screen);
 
             if (g_switchTo >= 0 && !g_open.load())
             {
