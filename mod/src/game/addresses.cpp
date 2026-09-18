@@ -72,7 +72,25 @@ namespace psm::addr
     {
         s.eventPost = Unique("EventPost", "4C 8B DC 49 89 5B 18 49 89 73 20 89 54 24 10 57 41 56 41 57 48 81 EC 90 00 00 00 4D 8B F1 4D 8B F8 8B FA 48 8B F1 80 79 1A 00");
         s.requestPhase = Unique("RequestPhase", "48 89 5C 24 10 48 89 6C 24 20 56 57 41 56 48 83 EC 30 41 0F B6 F0 0F B6 EA 4C 8B F1 41 B0 01 48 8B 11 48 8D 4C 24 20 E8 ?? ?? ?? ??");
-        s.modeSwitch = Unique("ModeSwitch", "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 48 8D AC 24 F0 FE FF FF 48 81 EC 10 02 00 00 48 8B D9");
+        // Anchored on the frame setup and the first field reads rather than the
+        // prologue. The prologue is what changed between game builds: 1.0.0.2850
+        // saved rbx, rsi and rdi into shadow space, 1.0.0.2944 saves only rbx and
+        // pushes the other two, so a pattern starting at the entry matches one
+        // build and not the other. Everything from the `lea rbp` onwards is the
+        // same on both, so match there and walk back through the unwind info.
+        const uintptr_t modeBody = Unique("ModeSwitch",
+            "48 8D AC 24 F0 FE FF FF 48 81 EC 10 02 00 00 48 8B D9 48 8B 41 08 48 8B 50 78 4C 8B ?? 4D 85");
+        if (modeBody)
+        {
+            const uintptr_t entry = FunctionEntry(modeBody);
+            if (!entry || modeBody - entry > 0x40)
+                LOG_ERR("[addr] ModeSwitch: the body at +%llX has no function entry near it", R(modeBody));
+            else
+            {
+                s.modeSwitch = entry;
+                LOG("[addr] ModeSwitch entry +%llX", R(entry));
+            }
+        }
         s.stageClose = Unique("StageClose", "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 4D 8B E1 49 8B F0 48 8B DA");
         s.inputBlockSet = Unique("InputBlockSet", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 44 88 44 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 41 0F B6 E8 4C 8B FA");
         s.eventManagerGlobal = Global("EventManager", "48 8B 1D ?? ?? ?? ?? 48 89 5C 24 78 48 8B 03 48 8B CB FF 50 08 90 0F B7 06 66 89 44 24 60", 7);
