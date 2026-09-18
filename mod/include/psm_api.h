@@ -127,8 +127,9 @@ PSM_API int         PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLe
  * thread, within a few frames, PSM offers the item to each storage that is on,
  * in a fixed order (Collectibles Chest, Abyss gear, Gatherables Chest, Kuku
  * Cooler, Bird Feed, Camp Straw, Wardrobe, then Private Storage), through the
- * game's own move check, and sends it to the first that takes it. Nothing moves
- * outside free play or while a storage is open; it waits instead. */
+ * game's own move check, and sends it to the first that takes it. PsmDeposit
+ * refuses a pickup reported outside free play or while a storage is open, and a
+ * queued one that play leaves free play before it moves waits for it to return. */
 typedef struct PsmAutoStore
 {
     uint32_t size;                          /* sizeof(PsmAutoStore) */
@@ -157,6 +158,11 @@ PSM_API int         PsmApplyNeverMove(const uint16_t* items, int count, char* wh
  * a storage is open, or the queue is full. Nothing is queued on 0, so call it
  * as the pickup lands. */
 PSM_API int         PsmDeposit(uint16_t item, int64_t gained);
+/* Any thread. 1 when the player is in free play right now, by the same test
+ * PsmDeposit uses: the last frame, under a second old, was in free play (not a
+ * shop, craft, menu, load or cutscene) and no PSM storage is open. 0 otherwise,
+ * including when PSM's frame hook is not in. */
+PSM_API int         PsmFreePlay(void);
 
 #define PSM_DEPOSIT_STORED              1   /* moved is how many went into storage */
 #define PSM_DEPOSIT_NO_STORAGE_TAKES_IT 2

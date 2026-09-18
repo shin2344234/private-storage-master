@@ -36,6 +36,9 @@ namespace psm::deposit
     // function is missing, the player is not in free play, a storage is open or
     // the queue is full.
     bool Queue(uint16_t item, int64_t gained);
+    // Any thread. The test Queue applies: the last frame tick, under a second old,
+    // saw free play, and no PSM storage is open.
+    bool FreePlayNow();
     // Game thread, every frame. canMove: free play with no storage screen open.
     void Tick(bool canMove);
     // Copies out and forgets finished deposits, oldest first.

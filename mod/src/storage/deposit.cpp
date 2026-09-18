@@ -337,13 +337,15 @@ namespace psm::deposit
     // queued would ever run or report.
     bool Available() { return inv::CanMove() && storage::Ready() && !g_broken; }
 
+    bool FreePlayNow() { return storage::PlayState() == storage::Play::Free && storage::OpenStorage() < 0; }
+
     bool Queue(uint16_t item, int64_t gained)
     {
         if (item == 0xFFFF || gained <= 0 || !Settings::Get().autoStore || !Available()) return false;
         // A real pickup happens in free play. Anything reported from a shop, a craft
         // or a menu is refused here rather than queued, so a purchase cannot be
         // taken for loot.
-        if (storage::PlayState() != storage::Play::Free || storage::OpenStorage() >= 0) return false;
+        if (!FreePlayNow()) return false;
         return Push(Request{item, gained, false});
     }
 

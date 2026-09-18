@@ -251,6 +251,8 @@ PSM_EXPORT int PsmApplyNeverMove(const uint16_t* items, int count, char* why, in
 
 PSM_EXPORT int PsmDeposit(uint16_t item, int64_t gained) { return psm::deposit::Queue(item, gained) ? 1 : 0; }
 
+PSM_EXPORT int PsmFreePlay(void) { return psm::deposit::FreePlayNow() ? 1 : 0; }
+
 PSM_EXPORT int PsmDepositResults(PsmDepositResult* out, int max)
 {
     if (!out || max <= 0) return 0;
