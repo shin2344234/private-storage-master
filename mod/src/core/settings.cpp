@@ -265,10 +265,15 @@ namespace psm::Settings
                     "; Writes the size and contents count of every storage to the log.\n"
                     "CapacityDumpKey=%s\n\n"
                     "; 1 keeps other keys from the game while a modifier your storage keys use is\n"
-                    "; held, so a slip onto Z while holding Ctrl does not fire a skill. Movement\n"
+                    "; held, so a slip off a storage key does not fire a skill. Movement\n"
                     "; (W, A, S, D, arrows), Space, Tab, Enter, Escape and Alt+F4 still go through.\n"
-                    "HideKeysWithModifier=%d\n\n",
-                    KeyText(v.dumpKey, a, sizeof a), v.hideKeysWithModifier ? 1 : 0);
+                    "; Keys the game itself uses with Ctrl (Z, Shift and +) go through as well. Ctrl is\n"
+                    "; also the game's guard and lock-on key, so other keys you press while guarding\n"
+                    "; are held back. Mouse buttons never are.\n"
+                    "HideKeysWithModifier=%d\n\n"
+                    "; Turns HideKeysWithModifier on and off while you play, and saves it. None for no key.\n"
+                    "HideKeysToggleKey=%s\n\n",
+                    KeyText(v.dumpKey, a, sizeof a), v.hideKeysWithModifier ? 1 : 0, KeyText(v.hideKeysToggleKey, b, sizeof b));
             fprintf(f,
                     "; ------------------------------------------------------------------ sizes\n\n"
                     "; Size changes take effect the next time the game starts.\n\n"
@@ -327,6 +332,12 @@ namespace psm::Settings
                     KeyBind k;
                     if (ParseKey(val, k)) out.dumpKey = k;
                     else LOG_ERR("[settings] CapacityDumpKey=%s is not a key this mod can bind; keeping the default", val);
+                }
+                else if (_stricmp(key, "HideKeysToggleKey") == 0)
+                {
+                    KeyBind k;
+                    if (ParseKey(val, k)) out.hideKeysToggleKey = k;
+                    else LOG_ERR("[settings] HideKeysToggleKey=%s is not a key this mod can bind; keeping the default", val);
                 }
                 else
                 {
@@ -401,6 +412,14 @@ namespace psm::Settings
                     v.dumpKey = KeyBind{};
                     break;
                 }
+            const KeyBind& h = v.hideKeysToggleKey;
+            bool clash = h.vk && h.vk == v.dumpKey.vk && h.mods == v.dumpKey.mods;
+            for (int i = 0; i < kStorages && !clash; ++i) clash = h.vk && h.vk == v.key[i].vk && h.mods == v.key[i].mods;
+            if (clash)
+            {
+                LOG_ERR("[settings] HideKeysToggleKey=%s is already bound; the toggle key is turned off", KeyText(h, t, sizeof t));
+                v.hideKeysToggleKey = KeyBind{};
+            }
         }
 
         // Published copies are never freed: a reader may still hold the old one,
@@ -422,8 +441,10 @@ namespace psm::Settings
             for (int i = 0; i < kStorages; ++i)
                 LOG("[settings] %-15s key %-12s pad %-10s slots %d", kInfo[i].key, KeyText(v.key[i], a, sizeof a), PadText(v.pad[i], b, sizeof b),
                     v.slots[i]);
-            LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s LeaveCapacityAlone=%d PrivateStorageExpansions=%d", v.enabled ? 1 : 0,
-                     v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a), v.leaveCapacityAlone ? 1 : 0, v.privateStorageExpansions);
+            LOG_NOTE("[settings] Enabled=%d DebugLog=%d CapacityDumpKey=%s HideKeysWithModifier=%d HideKeysToggleKey=%s LeaveCapacityAlone=%d "
+                     "PrivateStorageExpansions=%d", v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a),
+                     v.hideKeysWithModifier ? 1 : 0, KeyText(v.hideKeysToggleKey, b, sizeof b), v.leaveCapacityAlone ? 1 : 0,
+                     v.privateStorageExpansions);
         }
     }
 
@@ -476,6 +497,7 @@ namespace psm::Settings
             ParsePad(kInfo[i].defPad, v.pad[i]);
         }
         ParseKey("Ctrl+F12", v.dumpKey);
+        ParseKey("Ctrl+F10", v.hideKeysToggleKey);   // F10 is in the game's debug group only
         return v;
     }
 
@@ -530,6 +552,11 @@ namespace psm::Settings
         if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
         {
             if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
+            return false;
+        }
+        if (v.hideKeysToggleKey.vk && !Bindable(v.hideKeysToggleKey.vk))
+        {
+            if (why) snprintf(why, whyLen, "Held-key toggle: mouse buttons and modifier keys cannot be bound");
             return false;
         }
         Clamp(v);

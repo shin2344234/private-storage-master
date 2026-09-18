@@ -449,9 +449,21 @@ namespace psm::storage
         // ------------------------------------------------------------ keyboard
         // The game reads the keyboard from window messages (R3E 5.1), so bound keys
         // are taken out there. Modifiers are read the same way the game would.
-        HWND    g_hwnd = nullptr;
-        WNDPROC g_oldProc = nullptr;
-        bool    g_unicode = true;
+        //
+        // The game has two top-level windows of its own, "Root" and
+        // "WindowsLauncherClassName", and shows one of them: Root in the probe
+        // sessions of 16 September, the launcher class on 18 September with Root
+        // hidden at 0x0. Both are taken, each with its own original procedure, so
+        // the one that is showing is covered even if the game swaps them.
+        //
+        // The poller fills an entry and only then publishes it through the count;
+        // the window procedure runs on the game's thread and reads entries below
+        // the count. An entry's original procedure is stored before our procedure
+        // goes in, so no message can arrive with nothing to pass it on to.
+        struct HookedWindow { HWND hwnd; WNDPROC old; bool unicode; };
+        constexpr int kMaxWindows = 4;
+        HookedWindow g_windows[kMaxWindows] = {};
+        std::atomic<int> g_windowCount{0};
         bool    g_swallowed[256] = {};
         bool    g_eatChar = false;
 
@@ -471,6 +483,7 @@ namespace psm::storage
             for (int i = 0; i < Settings::kStorages; ++i)
                 if (v.key[i].vk == vk && v.key[i].mods == mods) return i;
             if (v.dumpKey.vk == vk && v.dumpKey.mods == mods) return -2;
+            if (v.hideKeysToggleKey.vk == vk && v.hideKeysToggleKey.mods == mods) return -3;
             return -1;
         }
 
@@ -480,14 +493,41 @@ namespace psm::storage
             if (!mods) return false;
             const Settings::Values& v = Settings::Get();
             if (v.dumpKey.vk && v.dumpKey.mods == mods) return true;
+            if (v.hideKeysToggleKey.vk && v.hideKeysToggleKey.mods == mods) return true;
             for (int i = 0; i < Settings::kStorages; ++i)
                 if (v.key[i].vk && v.key[i].mods == mods) return true;
             return false;
         }
 
-        // Keys the game keeps while a storage modifier is held.
+        // Keyboard keys the game's own input map pairs with Ctrl or with LB, its pad
+        // twin, which Ctrl never holds back. Read from ui/inputmap.xml and
+        // inputmap_common.xml, the same on 1.0.0.2850 and 1.0.0.2944. Ctrl alone is
+        // the guard, and the map pairs the guard with other keys two ways: a
+        // keyboard chord on Ctrl, or a pad chord on LB whose keyboard key is bare.
+        // Z is the second kind, Key_Skill_13 (LB+LT on the pad), so the game reads
+        // Ctrl+Z as guard plus Z. Shift (MouseCursorToggle) and "+"
+        // (Debug_FreeCamWithCharacterKeyBoard) are the first kind, both debug;
+        // "+" is taken as either plus key. Every other pairing is with the mouse,
+        // which the block never touches.
+        bool GameUsesWithCtrl(uint8_t vk)
+        {
+            switch (vk)
+            {
+            case 'Z':
+            case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
+            case VK_OEM_PLUS: case VK_ADD:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        // Keys the game keeps while a storage modifier is held: the ones it pairs
+        // with Ctrl itself, plus movement, the modifiers and the system keys, which
+        // pass whatever the input map says so a player can still move while guarding.
         bool PassWithModifier(uint8_t vk, uint8_t mods)
         {
+            if ((mods & Settings::kModCtrl) && GameUsesWithCtrl(vk)) return true;
             switch (vk)
             {
             case 'W': case 'A': case 'S': case 'D':
@@ -502,6 +542,18 @@ namespace psm::storage
             default:
                 return false;
             }
+        }
+
+        // Hands a message to the procedure that window had before ours.
+        LRESULT PassOn(HWND h, UINT m, WPARAM w, LPARAM l)
+        {
+            const int n = g_windowCount.load(std::memory_order_acquire);
+            for (int i = 0; i < n; ++i)
+            {
+                const HookedWindow& e = g_windows[i];
+                if (e.hwnd == h) return e.unicode ? CallWindowProcW(e.old, h, m, w, l) : CallWindowProcA(e.old, h, m, w, l);
+            }
+            return DefWindowProcW(h, m, w, l);   // not a window we took; never reached, but never call through nothing
         }
 
         LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -532,45 +584,85 @@ namespace psm::storage
                 g_eatChar = false;
                 return 0;
             }
-            return g_unicode ? CallWindowProcW(g_oldProc, h, m, w, l) : CallWindowProcA(g_oldProc, h, m, w, l);
+            return PassOn(h, m, w, l);
         }
 
-        // The game's main window has class "Root"; the splash window before it does not.
-        BOOL CALLBACK FindGameWindow(HWND h, LPARAM out)
+        // The game's own window classes. Anything else in the process, the IME
+        // window or another mod's, is left alone.
+        bool GameWindowClass(HWND h)
+        {
+            char cls[64] = {};
+            GetClassNameA(h, cls, sizeof cls);
+            return strcmp(cls, "Root") == 0 || strcmp(cls, "WindowsLauncherClassName") == 0;
+        }
+
+        struct Found { HWND h[kMaxWindows]; int n; };
+
+        BOOL CALLBACK FindGameWindows(HWND h, LPARAM out)
         {
             DWORD pid = 0;
             GetWindowThreadProcessId(h, &pid);
-            if (pid != GetCurrentProcessId() || GetWindow(h, GW_OWNER)) return TRUE;
-            char cls[32] = {};
-            GetClassNameA(h, cls, sizeof cls);
-            if (strcmp(cls, "Root") != 0 || !IsWindowVisible(h)) return TRUE;
-            *reinterpret_cast<HWND*>(out) = h;
-            return FALSE;
+            if (pid != GetCurrentProcessId() || GetWindow(h, GW_OWNER) || !GameWindowClass(h)) return TRUE;
+            auto* f = reinterpret_cast<Found*>(out);
+            if (f->n < kMaxWindows) f->h[f->n++] = h;
+            return TRUE;
         }
 
-        void SubclassGameWindow()
+        // Takes every game window not taken yet, and returns how many of the taken
+        // ones are showing. A window already in the table is never taken twice,
+        // even when its procedure is no longer ours: Master Looter's overlay
+        // subclasses after us, and taking the window again would store its
+        // procedure as the original and send the two in a loop.
+        int SubclassGameWindows()
         {
-            if (g_hwnd && IsWindow(g_hwnd)) return;
-            g_hwnd = nullptr;
-            HWND h = nullptr;
-            EnumWindows(FindGameWindow, reinterpret_cast<LPARAM>(&h));
-            if (!h) return;
-            g_unicode = IsWindowUnicode(h) != 0;
-            const LONG_PTR prev = g_unicode ? SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProc))
-                                            : SetWindowLongPtrA(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProc));
-            g_hwnd = h;
-            if (!prev) { LOG_ERR("[keys] could not take the game window's keys (%lu); keyboard bindings do not work", GetLastError()); return; }
-            g_oldProc = reinterpret_cast<WNDPROC>(prev);
-            LOG("[keys] hiding bound keys from the game window %p", static_cast<void*>(h));
+            Found f{};
+            EnumWindows(FindGameWindows, reinterpret_cast<LPARAM>(&f));
+            for (int k = 0; k < f.n; ++k)
+            {
+                const HWND h = f.h[k];
+                const int n = g_windowCount.load(std::memory_order_relaxed);
+                bool known = false;
+                for (int i = 0; i < n; ++i) known |= g_windows[i].hwnd == h;
+                if (known || n >= kMaxWindows) continue;
+
+                const bool unicode = IsWindowUnicode(h) != 0;
+                const LONG_PTR cur = unicode ? GetWindowLongPtrW(h, GWLP_WNDPROC) : GetWindowLongPtrA(h, GWLP_WNDPROC);
+                if (!cur) continue;
+                g_windows[n] = HookedWindow{h, reinterpret_cast<WNDPROC>(cur), unicode};
+                g_windowCount.store(n + 1, std::memory_order_release);
+                const LONG_PTR prev = unicode ? SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProc))
+                                              : SetWindowLongPtrA(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProc));
+                char cls[64] = {};
+                GetClassNameA(h, cls, sizeof cls);
+                if (!prev)
+                {
+                    LOG_ERR("[keys] could not take the keys of game window %s (%lu)", cls, GetLastError());
+                    continue;
+                }
+                // Something swapped the procedure between the read and ours going in.
+                if (prev != cur) g_windows[n].old = reinterpret_cast<WNDPROC>(prev);
+                LOG("[keys] hiding bound keys from game window %p, class %s%s", static_cast<void*>(h), cls,
+                    IsWindowVisible(h) ? "" : ", hidden for now");
+            }
+            int showing = 0;
+            const int n = g_windowCount.load(std::memory_order_acquire);
+            for (int i = 0; i < n; ++i)
+                if (IsWindow(g_windows[i].hwnd) && IsWindowVisible(g_windows[i].hwnd)) ++showing;
+            return showing;
         }
 
-        void RestoreGameWindow()
+        void RestoreGameWindows()
         {
-            if (!g_hwnd || !g_oldProc || !IsWindow(g_hwnd)) return;
-            const LONG_PTR cur = g_unicode ? GetWindowLongPtrW(g_hwnd, GWLP_WNDPROC) : GetWindowLongPtrA(g_hwnd, GWLP_WNDPROC);
-            if (cur != reinterpret_cast<LONG_PTR>(WndProc)) return;   // someone chained after us; leave it
-            if (g_unicode) SetWindowLongPtrW(g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_oldProc));
-            else SetWindowLongPtrA(g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_oldProc));
+            const int n = g_windowCount.load(std::memory_order_acquire);
+            for (int i = 0; i < n; ++i)
+            {
+                const HookedWindow& e = g_windows[i];
+                if (!IsWindow(e.hwnd)) continue;
+                const LONG_PTR cur = e.unicode ? GetWindowLongPtrW(e.hwnd, GWLP_WNDPROC) : GetWindowLongPtrA(e.hwnd, GWLP_WNDPROC);
+                if (cur != reinterpret_cast<LONG_PTR>(WndProc)) continue;   // someone chained after us; leave it
+                if (e.unicode) SetWindowLongPtrW(e.hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(e.old));
+                else SetWindowLongPtrA(e.hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(e.old));
+            }
         }
 
         // ------------------------------------------------------------ controller
@@ -586,18 +678,51 @@ namespace psm::storage
 
         bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
+        // Flips HideKeysWithModifier and saves it, the same way Master Looter's
+        // Storage tab changes a setting. Always logged, since it is something the
+        // player did on purpose and the next log should say which way it went.
+        void ToggleHideKeys()
+        {
+            Settings::Values v = Settings::Get();
+            v.hideKeysWithModifier = !v.hideKeysWithModifier;
+            char why[160];
+            const bool saved = Settings::Apply(v, why, sizeof why);
+            LOG_NOTE("[keys] HideKeysWithModifier is now %s%s%s", v.hideKeysWithModifier ? "on" : "off",
+                     saved ? "" : ", but it was not saved: ", saved ? "" : why);
+        }
+
         DWORD WINAPI Poller(LPVOID)
         {
             bool was[Settings::kStorages] = {};
-            bool keyWas[Settings::kStorages + 1] = {};
+            bool keyWas[Settings::kStorages + 2] = {};   // the storages, then the dump key, then the block toggle
             DWORD since[Settings::kStorages] = {};
             bool held[Settings::kStorages] = {};
             DWORD nextWindowCheck = 0;
+            // 1.0.0 looked for one window class, found nothing on either game
+            // build and said nothing, for 24 sessions. Missing it is worth an
+            // error line, once, and finding it later is worth a note, once.
+            const DWORD pollStart = GetTickCount();
+            bool saidMissing = false, saidFound = false;
             while (!g_stop.load())
             {
                 Sleep(16);
                 const DWORD now = GetTickCount();
-                if (now >= nextWindowCheck) { SubclassGameWindow(); nextWindowCheck = now + 500; }
+                if (now >= nextWindowCheck)
+                {
+                    const int showing = SubclassGameWindows();
+                    if (!showing && !saidMissing && now - pollStart > 60000)
+                    {
+                        LOG_ERR("[keys] no game window to take keys from after a minute (looked for Root and WindowsLauncherClassName). "
+                                "Storage keys still work, but bound keys also reach the game and HideKeysWithModifier does nothing.");
+                        saidMissing = true;
+                    }
+                    else if (showing && saidMissing && !saidFound)
+                    {
+                        LOG_NOTE("[keys] found the game window after all; bound keys are hidden from the game now");
+                        saidFound = true;
+                    }
+                    nextWindowCheck = now + 500;
+                }
 
                 const bool front = GameInFront();
                 const bool paused = Paused();
@@ -611,16 +736,17 @@ namespace psm::storage
                     if (KeyDown(VK_SHIFT)) mods |= Settings::kModShift;
                     if (KeyDown(VK_MENU)) mods |= Settings::kModAlt;
                 }
-                for (int i = 0; i <= Settings::kStorages; ++i)
+                for (int i = 0; i <= Settings::kStorages + 1; ++i)
                 {
-                    const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : v.dumpKey;
+                    const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : i == Settings::kStorages ? v.dumpKey : v.hideKeysToggleKey;
                     const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk);
                     if (down && !keyWas[i] && !paused)
                     {
                         char t[32];
                         LOG("[keys] %s", Settings::KeyText(k, t, sizeof t));
                         if (i < Settings::kStorages) g_pending = i;
-                        else capacity::RequestDump();
+                        else if (i == Settings::kStorages) capacity::RequestDump();
+                        else ToggleHideKeys();
                     }
                     keyWas[i] = down;
                 }
@@ -704,7 +830,13 @@ namespace psm::storage
     }
 
     bool Ready() { return g_ready.load(); }
-    bool KeyWindowFound() { return g_hwnd && g_oldProc && IsWindow(g_hwnd); }
+    bool KeyWindowFound()
+    {
+        const int n = g_windowCount.load(std::memory_order_acquire);
+        for (int i = 0; i < n; ++i)
+            if (IsWindow(g_windows[i].hwnd) && IsWindowVisible(g_windows[i].hwnd)) return true;
+        return false;
+    }
     int OpenStorage() { return g_open.load() ? g_openChest.load() : -1; }
     void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount() + ms; }
 
@@ -725,7 +857,7 @@ namespace psm::storage
             CloseHandle(g_poller);
             g_poller = nullptr;
         }
-        RestoreGameWindow();
+        RestoreGameWindows();
         pad::Shutdown();
     }
 }

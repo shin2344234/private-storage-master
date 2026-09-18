@@ -48,6 +48,11 @@ namespace psm::Settings
         // While Ctrl (or whatever modifier a storage key uses) is held, keep every
         // other key from the game too, so Ctrl+Z cannot fire the Z skill.
         bool hideKeysWithModifier = true;
+        // Turns hideKeysWithModifier on and off in game and saves it. Ctrl is the
+        // game's guard and lock-on key, so a player may want keys back mid-fight.
+        // Not in PsmSettings: the API struct shipped with 1.0.0 and keeps its size,
+        // and FromC starts from the current values, so Master Looter keeps it too.
+        KeyBind hideKeysToggleKey;
 
         bool leaveCapacityAlone = false;
         // Slots per storage; 0 keeps the game's size. Storage 0 (Private Storage)

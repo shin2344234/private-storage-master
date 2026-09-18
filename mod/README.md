@@ -30,10 +30,18 @@ Keys
     Ctrl+F7   Bird Feed (bird feeder)
     Ctrl+F8   Camp Provisions (town warehouse)
     Ctrl+F9   Abyss gear storage (Kuku Pot bag)
+    Ctrl+F10  hold other keys back while Ctrl is down, on or off
     Ctrl+F12  write every storage's size to the log
 
 The same key closes. Another storage's key switches straight to it. Esc and B
 close too. Keys only work in free play.
+
+Holding Ctrl keeps other keys from the game, so a slip off a storage key does
+not fire a skill. W, A, S, D and the arrows get through all the same, and so do
+the keys the game uses with Ctrl itself. Those are Z for the guard's weapon swap,
+plus Shift and +. Ctrl is also the game's guard and lock-on key, so any other key
+pressed while guarding is held back. Ctrl+F10 turns it off and on and saves the
+choice; HideKeysWithModifier and HideKeysToggleKey in the ini set the same thing.
 
 Sizes
 -----
