@@ -37,6 +37,10 @@ namespace psm::Settings
     // Sizes that are not a setting. The Collectibles Chest holds one of each of the
     // 958 collectibles in its data, so it is always given exactly that.
     inline constexpr int kFixedSlots[kStorages] = {0, 0, 0, 0, 958, 0, 0, 0, 0};
+    // Camp Provisions holds packaged trade goods, and the bag's move to it converts
+    // them, so it is never a place loot is stored.
+    inline constexpr int kTownWarehouse = 7;
+    inline constexpr int kNeverMoveMax = 32;
 
     struct Values
     {
@@ -60,6 +64,18 @@ namespace psm::Settings
         int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
         int  privateStorageExpansions = -1;  // -1: learn them from the save
         bool imported = false;               // settings came from PrivateStorageAnywhere.ini
+
+        // Loot straight into storage. Master Looter reports each pickup through
+        // PsmDeposit and storage/deposit moves it. Off until the player turns it on.
+        bool autoStore = false;
+        // Which storages may receive loot. Private Storage last and only when on; the
+        // Wardrobe off so new gear is seen before it is put away.
+        bool autoStoreTo[kStorages] = {false, true, false, true, true, true, true, false, true};
+        // Move the amount just picked up, not the whole stack, so what the player
+        // already carried stays in the bag.
+        bool autoStoreOnlyGained = true;
+        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980};   // item numbers; 1980 is silver
+        int autoStoreNeverMoveCount = 1;
     };
 
     void Load();                  // once, at startup

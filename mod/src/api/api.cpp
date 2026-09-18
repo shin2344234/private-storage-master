@@ -10,6 +10,7 @@
 #include "core/log.h"
 #include "core/settings.h"
 #include "storage/capacity.h"
+#include "storage/deposit.h"
 #include "storage/pad.h"
 #include "storage/storage.h"
 #include "version.h"
@@ -172,6 +173,46 @@ PSM_EXPORT int PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLen)
     v.hideKeysWithModifier = in->on != 0;
     v.hideKeysToggleKey = {in->toggleKey.vk, static_cast<uint8_t>(in->toggleKey.mods & 7)};
     return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+}
+
+static_assert(PSM_DEPOSIT_STORED == psm::deposit::kStored && PSM_DEPOSIT_BUSY == psm::deposit::kBusy,
+              "PSM_DEPOSIT_* and deposit::Reason must match");
+static_assert(sizeof(PsmDepositResult) == sizeof(psm::deposit::Result), "PsmDepositResult and deposit::Result must match");
+
+PSM_EXPORT int PsmGetAutoStore(PsmAutoStore* out, int defaults)
+{
+    if (!out || out->size != sizeof *out) return 0;
+    const Values v = defaults ? psm::Settings::Defaults() : psm::Settings::Get();
+    memset(out, 0, sizeof *out);
+    out->size = sizeof *out;
+    out->enabled = v.autoStore;
+    for (int i = 0; i < PSM_STORAGES; ++i) out->storages[i] = v.autoStoreTo[i];
+    out->onlyGained = v.autoStoreOnlyGained;
+    out->available = psm::deposit::Available();
+    return 1;
+}
+
+PSM_EXPORT int PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen)
+{
+    if (why && whyLen > 0) why[0] = 0;
+    if (!in || in->size != sizeof *in)
+    {
+        if (why && whyLen > 0) snprintf(why, whyLen, "auto-store struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
+        return 0;
+    }
+    Values v = psm::Settings::Get();
+    v.autoStore = in->enabled != 0;
+    for (int i = 0; i < PSM_STORAGES; ++i) v.autoStoreTo[i] = in->storages[i] != 0;
+    v.autoStoreOnlyGained = in->onlyGained != 0;
+    return psm::Settings::Apply(v, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+}
+
+PSM_EXPORT int PsmDeposit(uint16_t item, int64_t gained) { return psm::deposit::Queue(item, gained) ? 1 : 0; }
+
+PSM_EXPORT int PsmDepositResults(PsmDepositResult* out, int max)
+{
+    if (!out || max <= 0) return 0;
+    return psm::deposit::TakeResults(reinterpret_cast<psm::deposit::Result*>(out), max);
 }
 
 PSM_EXPORT int PsmKeyText(PsmKey key, char* out, int outLen)

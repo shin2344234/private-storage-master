@@ -30,9 +30,4 @@ namespace psm::capacity
     int LearnedPrivateExtras();
     // Refreshed about once a second while something keeps asking.
     void GetSize(int storage, SizeInfo& out);
-
-    // Deposit probe (R5), DebugLog=1 only. Request from any thread; the tick runs
-    // it on the game's main thread and logs the result half a second later.
-    void RequestDepositProbe();
-    void DepositProbeTick();
 }

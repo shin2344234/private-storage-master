@@ -119,6 +119,51 @@ PSM_API int         PsmGetKeyBlock(PsmKeyBlock* out, int defaults);
 /* Applies at once and saves the ini. 0 with a reason in why. A toggle key
  * that clashes with another binding is turned off; read it back to see. */
 PSM_API int         PsmApplyKeyBlock(const PsmKeyBlock* in, char* why, int whyLen);
+
+/* Loot straight into storage. Optional, look every one up by name.
+ *
+ * After a pickup lands in the bag, a looting mod calls PsmDeposit with the
+ * item number (bag slot +0x08) and how many just arrived. On the game's main
+ * thread, within a few frames, PSM offers the item to each storage that is on,
+ * in a fixed order (Collectibles Chest, Abyss gear, Gatherables Chest, Kuku
+ * Cooler, Bird Feed, Camp Straw, Wardrobe, then Private Storage), through the
+ * game's own move check, and sends it to the first that takes it. Nothing moves
+ * outside free play or while a storage is open; it waits instead. */
+typedef struct PsmAutoStore
+{
+    uint32_t size;                          /* sizeof(PsmAutoStore) */
+    int32_t  enabled;                       /* the master switch, off by default */
+    int32_t  storages[PSM_STORAGES];        /* 1 = may receive loot; Camp Provisions is always 0 */
+    int32_t  onlyGained;                    /* 1 = move what was picked up, 0 = the whole stack */
+    int32_t  available;                     /* read only: this game version has the move PSM needs */
+} PsmAutoStore;
+/* The live values, or the defaults when defaults is nonzero. */
+PSM_API int         PsmGetAutoStore(PsmAutoStore* out, int defaults);
+/* Applies at once and saves the ini. 0 with a reason in why. */
+PSM_API int         PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen);
+
+/* Any thread. 1 when queued; 0 when auto-store is off, this game version lacks
+ * the move, or the queue is full. */
+PSM_API int         PsmDeposit(uint16_t item, int64_t gained);
+
+#define PSM_DEPOSIT_STORED              1   /* moved is how many went into storage */
+#define PSM_DEPOSIT_NO_STORAGE_TAKES_IT 2
+#define PSM_DEPOSIT_STORAGE_FULL        3   /* every storage that takes it is full */
+#define PSM_DEPOSIT_NEVER_MOVED         4   /* on AutoStoreNeverMove, silver by default */
+#define PSM_DEPOSIT_LOCKED              5   /* the player locked that stack */
+#define PSM_DEPOSIT_NOT_IN_BAG          6   /* it never showed up in the bag */
+#define PSM_DEPOSIT_OFF                 7
+#define PSM_DEPOSIT_BUSY                8   /* too many at once */
+
+typedef struct PsmDepositResult
+{
+    uint16_t item;
+    int16_t  storage;                       /* PSM storage index, -1 when it stayed in the bag */
+    int32_t  reason;                        /* PSM_DEPOSIT_* */
+    int64_t  moved;
+} PsmDepositResult;
+/* Copies out and forgets finished deposits, oldest first. Returns how many. */
+PSM_API int         PsmDepositResults(PsmDepositResult* out, int max);
 /* "Ctrl+F1", "LB+LS", "None". */
 PSM_API int         PsmKeyText(PsmKey key, char* out, int outLen);
 PSM_API int         PsmPadText(PsmPad pad, char* out, int outLen);

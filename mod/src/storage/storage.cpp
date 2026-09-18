@@ -13,6 +13,7 @@
 #include "game/farhook.h"
 #include "game/mem.h"
 #include "storage/capacity.h"
+#include "storage/deposit.h"
 #include "storage/pad.h"
 
 namespace psm::storage
@@ -329,7 +330,6 @@ namespace psm::storage
         // Once per frame, after the game's own mode switch.
         void Tick(uintptr_t pm)
         {
-            capacity::DepositProbeTick();
             const int act = g_pending.exchange(kActNone);
             if (act >= 0 && act < Settings::kStorages) { g_switchTo = -1; Request(pm, act); }
 
@@ -340,6 +340,9 @@ namespace psm::storage
             mem::Read8(pm + A.phaseScreenOff, &screen);
             g_freePlay = mode == 4 && screen == kScreenIngame;
             g_lastTick = GetTickCount();
+            // Loot moves only in free play, with no storage open or about to open,
+            // so a deposit never races the warehouse screen.
+            deposit::Tick(g_freePlay.load() && !g_open.load() && g_switchTo < 0);
 
             if (g_switchTo >= 0 && !g_open.load())
             {
@@ -754,10 +757,10 @@ namespace psm::storage
                     keyWas[i] = down;
                 }
                 {
-                    // Deposit probe (R5): Ctrl+F11, only with DebugLog=1.
+                    // Deposit test (auto-store): Ctrl+F11, only with DebugLog=1.
                     static bool probeWas = false;
                     const bool down = front && v.debugLog && mods == Settings::kModCtrl && KeyDown(VK_F11);
-                    if (down && !probeWas && !paused) { LOG_NOTE("[probe] Ctrl+F11"); capacity::RequestDepositProbe(); }
+                    if (down && !probeWas && !paused) deposit::DebugNextBagStack();
                     probeWas = down;
                 }
                 for (int i = 0; i < Settings::kStorages; ++i)

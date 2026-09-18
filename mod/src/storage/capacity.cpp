@@ -11,6 +11,7 @@
 #include "game/addresses.h"
 #include "game/farhook.h"
 #include "game/mem.h"
+#include "storage/inventory.h"
 #include "storage/storage.h"
 
 namespace psm::capacity
@@ -27,6 +28,12 @@ namespace psm::capacity
         std::atomic<bool> g_dump{false};
         HANDLE g_thread = nullptr;
         void* oRead = nullptr;
+
+        using inv::IndexName;
+        using inv::Manager;
+        using inv::PlayerHolder;
+        using inv::RecordByName;
+        using inv::RecordName;
 
         struct Target
         {
@@ -118,13 +125,6 @@ namespace psm::capacity
             else t.newMax = static_cast<uint16_t>(m + delta < kSlotArray ? m + delta : kSlotArray);
         }
 
-        bool RecordName(uintptr_t rec, char* out, size_t cap)
-        {
-            uintptr_t node = 0, text = 0;
-            out[0] = 0;
-            return mem::ReadPtr(rec + 8, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
-        }
-
         // Loader threads call this. It compares a name and writes two words, and
         // nothing else: no allocation, no locks the game holds, no game calls.
         void PatchRecord(uintptr_t rec)
@@ -164,36 +164,6 @@ namespace psm::capacity
         }
 
         // ------------------------------------------------------------ game reads
-        uintptr_t Manager(uint32_t* count, uintptr_t* records)
-        {
-            uintptr_t mgr = 0;
-            if (!g_addr.invMgrGlobal || !mem::ReadPtr(g_addr.invMgrGlobal, &mgr)) return 0;
-            uintptr_t vt = 0;
-            if (!mem::ReadPtr(mgr, &vt) || vt != g_addr.invMgrVtable) return 0;
-            if (!mem::Read32(mgr + 0x08, count) || *count == 0 || *count > 256 || !mem::ReadPtr(mgr + 0x58, records)) return 0;
-            return mgr;
-        }
-
-        bool IndexName(uint16_t index, char* out, size_t cap)
-        {
-            uint32_t n = 0;
-            uintptr_t arr = 0, rec = 0;
-            out[0] = 0;
-            return Manager(&n, &arr) && index < n && mem::ReadPtr(arr + 8ull * index, &rec) && RecordName(rec, out, cap);
-        }
-
-        // Controlled character's inventory holder (R3C 5).
-        uintptr_t PlayerHolder()
-        {
-            uintptr_t g = 0, mgr = 0, user = 0, ch = 0, comp = 0, holder = 0, owner = 0;
-            if (!g_addr.actorManagerGlobal || !mem::ReadPtr(g_addr.actorManagerGlobal, &g) || !mem::ReadPtr(g + 0x30, &mgr) ||
-                !mem::ReadPtr(mgr + 0x58, &user) || !mem::ReadPtr(user + 0xD8, &ch) || !mem::ReadPtr(ch + 0x68, &comp) ||
-                !mem::ReadPtr(comp + 0xB8, &holder))
-                return 0;
-            if (!mem::ReadPtr(holder + 8, &owner) || owner != ch) return 0;
-            return holder;
-        }
-
         struct Bucket { uint16_t index; int16_t cap, requested, granted, story; uint32_t slots; uint32_t filled; bool ok; };
 
         Bucket ReadBucket(uintptr_t bk, bool countItems)
@@ -279,7 +249,6 @@ namespace psm::capacity
             }
         }
 
-        uintptr_t RecordByName(const char* want);
         int s_candidate = -1;
         int s_agreed = 0;
 
@@ -357,248 +326,6 @@ namespace psm::capacity
         SizeInfo g_sizes[Settings::kStorages];
         std::atomic<DWORD> g_sizesWanted{0};
         std::atomic<bool> g_hooked{false};
-
-        uintptr_t RecordByName(const char* want)
-        {
-            uint32_t n = 0;
-            uintptr_t arr = 0;
-            if (!Manager(&n, &arr)) return 0;
-            for (uint32_t i = 0; i < n; ++i)
-            {
-                uintptr_t rec = 0;
-                char name[40];
-                if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
-            }
-            return 0;
-        }
-
-
-        // ------------------------------------------------------------ deposit probe (R5)
-        // Takes the next unlocked stack in the bag and offers it to each storage in
-        // turn through the game's own move check, stopping at the first that sends.
-        using MoveFn = void(__fastcall*)(uintptr_t holder, uint32_t* err, uint32_t actorA, uint32_t actorB, uint16_t item,
-                                         uint16_t variant, uint64_t count, uint16_t fromInventory, uint16_t srcSlot, uint32_t moveIndex);
-
-        constexpr const char* kProbeOrder[] = {"Housing_Collecting", "Housing_GatheredMaterials", "Housing_Refrigerator", "Housing_Dresser",
-                                                "BirdFeed", "CampStraw", "Kuku", "CampWareHouse"};
-
-        std::atomic<bool> g_probeWanted{false};
-        DWORD g_probeCheckAt = 0;
-        uint32_t g_probeNextSlot = 0;
-        struct ProbeMove
-        {
-            uint16_t item, slot, bagIndex, targetIndex;
-            int64_t bagBefore;
-            uint32_t targetBefore;
-            int64_t itemBefore;      // how many of the item the target held, so a merge into a stack shows
-            char target[40];
-        } g_probeMove{};
-
-        const char* ErrName(uint32_t e)
-        {
-            switch (e)
-            {
-            case 0:          return "sent";
-            case 0xFFFFFFFF: return "error not written";
-            case 0x73353994: return "eErrNoInvalidInventory";
-            case 0x982103B7: return "eErrNoInvalidTrData";
-            case 0x3B331F28: return "eErrNoInvalidActorKey";
-            case 0x3E2AD36C: return "eErrNoInvalidInteractionDistance";
-            case 0xED0EF13C: return "eErrNoCantMoveItem";
-            case 0xA187B201: return "eErrNoInvalidInventorySlotNoNotAssert";
-            case 0xD2023F88: return "eErrNoInventorySlotNotExist";
-            case 0x1E807FD1: return "eErrNoAlreadyExistItem";
-            case 0x92ADE5AA: return "eErrNoNoMoreInsertItem";
-            case 0xC36792C3: return "eErrNoInvalidItemCount";
-            case 0xF45703E9: return "eErrNoCannotPopHideOnlyQuestItem";
-            case 0x171B4DE6: return "eErrNoSocketLocked";
-            case 0xD65F8D70: return "eErrNoActorNotExist";
-            case 0x6C57E0EE: return "eErrNoCannotFindExchangeItemAsPrice";
-            case 0x6308EF12: return "eErrNoInvalidSlotNo";
-            case 0xEFD37ACC: return "eErrNoDontUseStoreCondition";
-            case 0xA13ED06F: return "eErrNoMoneyIsLack";
-            default:         return "unnamed";
-            }
-        }
-
-        uintptr_t PlayerCharacter()
-        {
-            uintptr_t g = 0, mgr = 0, user = 0, ch = 0;
-            if (!g_addr.actorManagerGlobal || !mem::ReadPtr(g_addr.actorManagerGlobal, &g) || !mem::ReadPtr(g + 0x30, &mgr) ||
-                !mem::ReadPtr(mgr + 0x58, &user) || !mem::ReadPtr(user + 0xD8, &ch))
-                return 0;
-            return ch;
-        }
-
-        int IndexByName(const char* want)
-        {
-            uint32_t n = 0;
-            uintptr_t arr = 0;
-            if (!Manager(&n, &arr)) return -1;
-            for (uint32_t i = 0; i < n; ++i)
-            {
-                uintptr_t rec = 0;
-                char name[40];
-                if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return static_cast<int>(i);
-            }
-            return -1;
-        }
-
-        uintptr_t BucketByIndex(uintptr_t holder, uint16_t index)
-        {
-            uintptr_t arr = 0;
-            uint32_t n = 0;
-            if (!holder || !mem::ReadPtr(holder + 0x18, &arr) || !mem::Read32(holder + 0x20, &n) || n > 128) return 0;
-            for (uint32_t i = 0; i < n; ++i)
-            {
-                uintptr_t bk = 0;
-                uint16_t idx = 0xFFFF;
-                if (mem::ReadPtr(arr + 8ull * i, &bk) && mem::Read16(bk + 0x10, &idx) && idx == index) return bk;
-            }
-            return 0;
-        }
-
-        // Index of the plain (type 0) entry from -> to in a record's move list (R3C 1.1).
-        int MoveIndex(uintptr_t rec, uint16_t from, uint16_t to)
-        {
-            uintptr_t list = 0;
-            uint32_t n = 0;
-            if (!mem::ReadPtr(rec + 0x38, &list) || !mem::Read32(rec + 0x40, &n) || n > 64) return -1;
-            for (uint32_t i = 0; i < n; ++i)
-            {
-                const uintptr_t e = list + 0xA0ull * i;
-                uint8_t type = 3;
-                uint16_t f = 0xFFFF, t = 0xFFFF;
-                if (mem::Read8(e, &type) && mem::Read16(e + 2, &f) && mem::Read16(e + 4, &t) && type == 0 && f == from && t == to)
-                    return static_cast<int>(i);
-            }
-            return -1;
-        }
-
-        bool SlotAt(uintptr_t bucket, uint32_t k, uint16_t* item, uint16_t* variant, int64_t* count, uint8_t* locked, uint64_t* instance)
-        {
-            uintptr_t slots = 0;
-            const uintptr_t s = mem::ReadPtr(bucket, &slots) ? slots + 0xC8ull * k : 0;
-            return s && mem::Read16(s + 0x08, item) && mem::Read16(s + 0x0A, variant) && mem::ReadBytes(s + 0x10, count, sizeof *count) &&
-                   mem::Read8(s + 0xA1, locked) && mem::Read64(s, instance);
-        }
-
-        // Every slot of a storage that holds this item, summed. A stack that joins one
-        // already there leaves the used count alone, so this is the only way to see it.
-        int64_t ItemTotal(uintptr_t bucket, uint16_t want)
-        {
-            uint32_t size = 0;
-            if (!bucket || !mem::Read32(bucket + 0x08, &size)) return -1;
-            size &= 0xFFFF;
-            int64_t total = 0;
-            for (uint32_t k = 0; k < size; ++k)
-            {
-                uint16_t item = 0xFFFF, variant = 0;
-                int64_t count = 0;
-                uint8_t locked = 0;
-                uint64_t instance = 0;
-                if (SlotAt(bucket, k, &item, &variant, &count, &locked, &instance) && item == want && count > 0) total += count;
-            }
-            return total;
-        }
-
-        bool CallMove(uintptr_t fn, uintptr_t holder, uint32_t* err, uint32_t actor, uint16_t item, uint16_t variant, uint64_t count,
-                      uint16_t from, uint16_t slot, uint32_t moveIndex)
-        {
-            __try
-            {
-                reinterpret_cast<MoveFn>(fn)(holder, err, actor, actor, item, variant, count, from, slot, moveIndex);
-                return true;
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-        }
-
-        void RunDepositProbe()
-        {
-            if (!g_addr.clientMoveItem) { LOG_NOTE("[probe] the move function was not found, so there is nothing to test"); return; }
-            const uintptr_t ch = PlayerCharacter();
-            const uintptr_t holder = PlayerHolder();
-            uint32_t actor = 0;
-            const int bagIndex = IndexByName("Character");
-            const uintptr_t bagRecord = RecordByName("Character");
-            const uintptr_t bag = bagIndex >= 0 ? BucketByIndex(holder, static_cast<uint16_t>(bagIndex)) : 0;
-            if (!ch || !holder || !mem::Read32(ch + 0x60, &actor) || !bagRecord || !bag)
-            {
-                LOG_NOTE("[probe] no character, bag or inventory table (character %s, holder %s, actor 0x%08X, bag index %d)",
-                         ch ? "yes" : "no", holder ? "yes" : "no", actor, bagIndex);
-                return;
-            }
-            uint32_t size = 0;
-            mem::Read32(bag + 0x08, &size);
-            size &= 0xFFFF;
-
-            uint16_t item = 0xFFFF, variant = 0;
-            int64_t count = 0;
-            uint8_t locked = 0;
-            uint64_t instance = 0;
-            uint32_t slot = size;
-            for (uint32_t step = 0; step < size; ++step)
-            {
-                const uint32_t k = (g_probeNextSlot + step) % size;
-                if (SlotAt(bag, k, &item, &variant, &count, &locked, &instance) && item != 0xFFFF && count > 0 && !locked) { slot = k; break; }
-            }
-            if (slot == size) { LOG_NOTE("[probe] no unlocked item in the bag"); return; }
-            g_probeNextSlot = slot + 1;
-            LOG_NOTE("[probe] bag slot %u: item %u variant 0x%04X count %lld instance %llu, actor 0x%08X, bag record index %d",
-                     slot, item, variant, static_cast<long long>(count), static_cast<unsigned long long>(instance), actor, bagIndex);
-
-            for (const char* name : kProbeOrder)
-            {
-                const int idx = IndexByName(name);
-                if (idx < 0) { LOG_NOTE("[probe]   %-26s no such record", name); continue; }
-                const uintptr_t bucket = BucketByIndex(holder, static_cast<uint16_t>(idx));
-                const Bucket before = bucket ? ReadBucket(bucket, true) : Bucket{};
-                const int64_t itemBefore = ItemTotal(bucket, item);
-                const int mi = MoveIndex(bagRecord, static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(idx));
-                if (!bucket || mi < 0) { LOG_NOTE("[probe]   %-26s skipped (bucket %s, move entry %d)", name, bucket ? "yes" : "no", mi); continue; }
-                uint32_t err = 0xFFFFFFFF;
-                if (!CallMove(g_addr.clientMoveItem, holder, &err, actor, item, variant, static_cast<uint64_t>(count),
-                              static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(slot), static_cast<uint32_t>(mi)))
-                {
-                    LOG_ERR("[probe]   %-26s the move function raised an exception; stopping", name);
-                    return;
-                }
-                LOG_NOTE("[probe]   %-26s move entry %2d, %u of %d used: %s (0x%08X)", name, mi, before.filled, before.cap, ErrName(err), err);
-                if (err == 0)
-                {
-                    g_probeMove = ProbeMove{item, static_cast<uint16_t>(slot), static_cast<uint16_t>(bagIndex), static_cast<uint16_t>(idx), count, before.filled, itemBefore, {}};
-                    strncpy_s(g_probeMove.target, name, _TRUNCATE);
-                    g_probeCheckAt = GetTickCount() + 500;
-                    return;
-                }
-            }
-            LOG_NOTE("[probe] no storage took item %u", item);
-        }
-
-        void CheckDepositProbe()
-        {
-            g_probeCheckAt = 0;
-            const uintptr_t holder = PlayerHolder();
-            const uintptr_t bag = BucketByIndex(holder, g_probeMove.bagIndex);
-            const uintptr_t target = BucketByIndex(holder, g_probeMove.targetIndex);
-            uint16_t item = 0xFFFF, variant = 0;
-            int64_t count = 0;
-            uint8_t locked = 0;
-            uint64_t instance = 0;
-            const bool slotRead = bag && SlotAt(bag, g_probeMove.slot, &item, &variant, &count, &locked, &instance);
-            const Bucket after = target ? ReadBucket(target, true) : Bucket{};
-            LOG_NOTE("[probe] 500 ms later: bag slot %u holds item %u count %lld (was item %u count %lld); %s has %u used (was %u)",
-                     g_probeMove.slot, slotRead ? item : 0xFFFF, static_cast<long long>(slotRead ? count : 0), g_probeMove.item,
-                     static_cast<long long>(g_probeMove.bagBefore), g_probeMove.target, after.filled, g_probeMove.targetBefore);
-            const int64_t itemAfter = ItemTotal(target, g_probeMove.item);
-            const int64_t gained = itemAfter - g_probeMove.itemBefore;
-            LOG_NOTE("[probe]   item %u in %s: %lld before, %lld after, %+lld; the stack was %lld, so the move %s",
-                     g_probeMove.item, g_probeMove.target, static_cast<long long>(g_probeMove.itemBefore), static_cast<long long>(itemAfter),
-                     static_cast<long long>(gained), static_cast<long long>(g_probeMove.bagBefore),
-                     g_probeMove.itemBefore < 0 || itemAfter < 0 ? "could not be counted"
-                     : gained == g_probeMove.bagBefore ? "arrived whole"
-                     : gained == 0 ? "did not arrive" : "arrived in part");
-        }
 
         void RefreshSizes()
         {
@@ -703,6 +430,7 @@ namespace psm::capacity
             if (i == 0) LOG("[capacity] addresses not found yet, retrying");
             Sleep(500);
         }
+        inv::SetAddresses(g_addr);   // deposits and the size table read through these
         g_thread = CreateThread(nullptr, 0, Worker, nullptr, 0, nullptr);
         if (!any)
         {
@@ -756,14 +484,6 @@ namespace psm::capacity
         AcquireSRWLockShared(&g_sizeLock);
         out = g_sizes[storage];
         ReleaseSRWLockShared(&g_sizeLock);
-    }
-
-    void RequestDepositProbe() { g_probeWanted = true; }
-
-    void DepositProbeTick()
-    {
-        if (g_probeWanted.exchange(false)) RunDepositProbe();
-        if (g_probeCheckAt && GetTickCount() >= g_probeCheckAt) CheckDepositProbe();
     }
 
     void Stop()

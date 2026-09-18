@@ -39,6 +39,8 @@ add_library(PrivateStorageMaster SHARED
     src/storage/storage.cpp
     src/storage/pad.cpp
     src/storage/capacity.cpp
+    src/storage/inventory.cpp
+    src/storage/deposit.cpp
     src/api/api.cpp
 )
 

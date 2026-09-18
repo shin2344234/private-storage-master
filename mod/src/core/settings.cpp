@@ -297,8 +297,62 @@ namespace psm::Settings
                     "; the first start with a new PrivateStorageSlots can come out a little high.\n"
                     "PrivateStorageExpansions=%d\n",
                     v.privateStorageExpansions);
+            fprintf(f,
+                    "\n[AutoStore]\n\n"
+                    "; Loot straight into storage. Master Looter reports what it picks up, and each\n"
+                    "; item goes to the first storage that is on here and takes it, in this order:\n"
+                    "; Collectibles Chest, Abyss gear storage, Gatherables Chest, Kuku Cooler, Bird\n"
+                    "; Feed, Camp Straw, Wardrobe, then Private Storage. The game's own rules decide\n"
+                    "; what each one takes, and what none of them takes stays in your bag. Nothing\n"
+                    "; moves while a storage is open or outside free play.\n"
+                    "AutoStore=%d\n\n"
+                    "; 1 lets that storage receive loot. Private Storage takes almost anything, so it\n"
+                    "; is off by default; the Wardrobe is off so new gear stays with you to look at.\n"
+                    "; Camp Provisions holds trade goods only and never receives loot.\n",
+                    v.autoStore ? 1 : 0);
+            for (int i = 0; i < kStorages; ++i)
+                if (i != kTownWarehouse) fprintf(f, "AutoStore%s=%d\n", kInfo[i].key, v.autoStoreTo[i] ? 1 : 0);
+            char never[kNeverMoveMax * 7] = "";
+            for (int i = 0; i < v.autoStoreNeverMoveCount; ++i)
+            {
+                char one[8];
+                snprintf(one, sizeof one, i ? ",%u" : "%u", v.autoStoreNeverMove[i]);
+                strcat_s(never, one);
+            }
+            fprintf(f,
+                    "\n; 1 moves only the amount you just picked up, so food and potions you were\n"
+                    "; already carrying stay in your bag. 0 moves the whole stack.\n"
+                    "AutoStoreOnlyGained=%d\n\n"
+                    "; Item numbers that never move, separated by commas. 1980 is silver.\n"
+                    "AutoStoreNeverMove=%s\n",
+                    v.autoStoreOnlyGained ? 1 : 0, never);
             fclose(f);
             return true;
+        }
+
+        // "1980, 2001": item numbers, up to kNeverMoveMax. An empty value clears the list.
+        void ParseItemList(const char* val, Values& out)
+        {
+            out.autoStoreNeverMoveCount = 0;
+            const char* p = val;
+            while (*p && out.autoStoreNeverMoveCount < kNeverMoveMax)
+            {
+                while (*p == ' ' || *p == ',' || *p == '\t') ++p;
+                if (!*p) break;
+                char* end = nullptr;
+                const unsigned long n = strtoul(p, &end, 10);
+                if (end == p) { LOG_ERR("[settings] AutoStoreNeverMove=%s has something that is not an item number; the rest is ignored", val); break; }
+                if (n < 0xFFFF) out.autoStoreNeverMove[out.autoStoreNeverMoveCount++] = static_cast<uint16_t>(n);
+                p = end;
+            }
+        }
+
+        // AutoStore<Storage>=0|1. False when the rest of the key names no storage.
+        bool AutoStoreSwitch(const char* rest, const char* val, Values& out)
+        {
+            for (int i = 0; i < kStorages; ++i)
+                if (_stricmp(rest, kInfo[i].key) == 0) { out.autoStoreTo[i] = atoi(val) != 0; return true; }
+            return false;
         }
 
         void ReadIni(Values& out)
@@ -327,6 +381,10 @@ namespace psm::Settings
                 else if (_stricmp(key, "HousingChests1000") == 0) { for (int i = 1; i <= 4; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "CampStorage1000") == 0) { for (int i = 5; i <= 8; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "PrivateStorageExpansions") == 0) out.privateStorageExpansions = atoi(val);
+                else if (_stricmp(key, "AutoStore") == 0) out.autoStore = atoi(val) != 0;
+                else if (_stricmp(key, "AutoStoreOnlyGained") == 0) out.autoStoreOnlyGained = atoi(val) != 0;
+                else if (_stricmp(key, "AutoStoreNeverMove") == 0) ParseItemList(val, out);
+                else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
                     KeyBind k;
@@ -383,6 +441,9 @@ namespace psm::Settings
             }
             if (v.privateStorageExpansions < -1) v.privateStorageExpansions = -1;
             if (v.privateStorageExpansions > kMaxSlots) v.privateStorageExpansions = kMaxSlots;
+            v.autoStoreTo[kTownWarehouse] = false;
+            if (v.autoStoreNeverMoveCount < 0) v.autoStoreNeverMoveCount = 0;
+            if (v.autoStoreNeverMoveCount > kNeverMoveMax) v.autoStoreNeverMoveCount = kNeverMoveMax;
         }
 
         // Two bindings on the same key or combo: the later one is turned off.
@@ -445,6 +506,14 @@ namespace psm::Settings
                      "PrivateStorageExpansions=%d", v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a),
                      v.hideKeysWithModifier ? 1 : 0, KeyText(v.hideKeysToggleKey, b, sizeof b), v.leaveCapacityAlone ? 1 : 0,
                      v.privateStorageExpansions);
+            if (v.autoStore)
+            {
+                char to[128] = "";
+                for (int i = 0; i < kStorages; ++i)
+                    if (v.autoStoreTo[i]) { if (to[0]) strcat_s(to, ","); strcat_s(to, kInfo[i].key); }
+                LOG_NOTE("[settings] AutoStore=1 to %s, OnlyGained=%d, %d never-move items", to[0] ? to : "nothing",
+                         v.autoStoreOnlyGained ? 1 : 0, v.autoStoreNeverMoveCount);
+            }
         }
     }
 
