@@ -1,6 +1,7 @@
 #include "storage/deposit.h"
 
 #include <Windows.h>
+#include <atomic>
 #include <cstring>
 
 #include "core/log.h"
@@ -93,7 +94,9 @@ namespace psm::deposit
         constexpr int kRefusedMax = 256;
         Refused g_refused[kRefusedMax];
         int g_refusedCount = 0, g_refusedNext = 0;
-        bool g_broken = false;   // the move function raised; nothing is sent again this session
+        // The move function raised; nothing is sent again this session. Atomic because
+        // PsmDeposit reads it from Master Looter's scan thread.
+        std::atomic<bool> g_broken{false};
 
         bool WasRefused(uint16_t item, int storage)
         {
