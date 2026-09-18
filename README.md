@@ -3,7 +3,7 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-Crimson Desert 2.02.00.
+Crimson Desert 2.02.00 and 2.03.00.
 
 It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 2.0 by jkiip. It was written from scratch and contains no code from either; see
@@ -24,11 +24,11 @@ imports only kernel32 and user32, so there is no network code in it, it touches
 no registry key, game file or save, and every line is here to read or build
 yourself.
 
-SHA-256 for 1.0.0:
+SHA-256 for 1.0.1:
 
-    009610ab0f423b8af96c074bc67c9c19733aa6142a55560be0431cb6b10d2e65  PrivateStorageMaster-1.0.0-DMM.zip
-    a818e431dce9d36d93b4764a2dfd23ff95a300b2835778b8b6a009ddf3050844  PrivateStorageMaster-1.0.0.zip
-    e022cdcef76dd4c33eb22f2c88995aee27084217643fa9e18e515e005fb13ac7  PrivateStorageMaster.asi
+    3f99caef392ce5c99f502a0c4289ec64e3ce2bfefbd158f63164cb9ae7ce3297  PrivateStorageMaster-1.0.1-DMM.zip
+    dd929a21ba0cb94d3e9b55818041d8affd22da08324a284f01af3f3dea7d030a  PrivateStorageMaster-1.0.1.zip
+    a4dd080a7064b964671f84649ed51c19c68b5d1ccb872ae32da65ef15fdd3fa1  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

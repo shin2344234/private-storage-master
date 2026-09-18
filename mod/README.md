@@ -1,5 +1,5 @@
-Private Storage Master 1.0.0 for Crimson Desert 2.02.00
-=======================================================
+Private Storage Master 1.0.1 for Crimson Desert 2.02.00 and 2.03.00
+===================================================================
 
 Opens storage from anywhere in the game's own warehouse screen and sets each
 storage's size.
@@ -58,8 +58,8 @@ Reporting a problem
 -------------------
 
 Set DebugLog=1, play until it happens, close the game and attach
-PrivateStorageMaster.log from bin64. Older sessions are kept as
-PrivateStorageMaster.01.log and up.
+PrivateStorageMaster.log from bin64. The two sessions before it are kept as
+PrivateStorageMaster.01.log and .02.log, or the last 24 with DebugLog=1.
 
 Building
 --------
