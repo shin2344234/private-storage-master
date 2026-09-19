@@ -12,6 +12,7 @@
 #include "storage/capacity.h"
 #include "storage/deposit.h"
 #include "storage/pad.h"
+#include "storage/stacks.h"
 #include "storage/storage.h"
 #include "version.h"
 
@@ -271,4 +272,90 @@ PSM_EXPORT int PsmPadText(PsmPad pad, char* out, int outLen)
     if (!out || outLen <= 0) return 0;
     psm::Settings::PadText({pad.hold, pad.press}, out, static_cast<size_t>(outLen));
     return 1;
+}
+
+// ---------------------------------------------------------------- stack sizes
+// include/stack_api.h, the interface Master Stack exports under the same names,
+// so Master Looter's Stacks tab can talk to whichever of the two is installed.
+#define STACK_API __declspec(dllexport)
+#include "stack_api.h"
+
+static_assert(STACK_STANDDOWN_NONE == psm::stacks::kApplying && STACK_STANDDOWN_OFF == psm::stacks::kOff &&
+              STACK_STANDDOWN_OTHER_MOD == psm::stacks::kOtherMod && STACK_STANDDOWN_NO_ANCHOR == psm::stacks::kNoAnchor &&
+              STACK_STANDDOWN_HOOK_FAILED == psm::stacks::kHookFailed && STACK_STANDDOWN_TOO_LATE == psm::stacks::kTooLate,
+              "the STACK_STANDDOWN_ codes and stacks::Reason must match");
+static_assert(STACK_MAX_MULTIPLIER == psm::Settings::kMaxStackMultiplier,
+              "STACK_MAX_MULTIPLIER and Settings::kMaxStackMultiplier must match");
+
+#define STACK_EXPORT extern "C" STACK_API
+
+STACK_EXPORT int StackApiVersion(void) { return STACK_API_VERSION; }
+
+STACK_EXPORT int StackGetStatus(StackStatus* out)
+{
+    if (!out || out->size != sizeof *out) return 0;
+    const psm::stacks::Report r = psm::stacks::Status();
+    memset(out, 0, sizeof *out);
+    out->size = sizeof *out;
+    snprintf(out->provider, sizeof out->provider, "%s", PSM_NAME);
+    snprintf(out->providerModule, sizeof out->providerModule, "%s", PSM_MODULE);
+    snprintf(out->version, sizeof out->version, "%s", PSM_VERSION);
+    snprintf(out->gameVersion, sizeof out->gameVersion, "%s", PSM_GAME);
+    out->applying = r.reason == psm::stacks::kApplying;
+    out->standDownReason = r.reason;
+    out->hooked = r.hooked;
+    out->multiplier = r.multiplier;
+    out->multiplierSetting = psm::Settings::Get().stackMultiplier;
+    out->restartNeeded = out->multiplierSetting != psm::Settings::Startup().stackMultiplier;
+    out->itemsRaised = r.patched;
+    out->itemsUnstackable = r.unstackable;
+    out->ceiling = STACK_CEILING;
+    out->maxMultiplier = STACK_MAX_MULTIPLIER;
+    out->biggest = r.biggest;
+    return 1;
+}
+
+STACK_EXPORT int StackStandDownText(int reason, char* out, int outLen)
+{
+    if (!out || outLen <= 0) return 0;
+    switch (reason)
+    {
+    case STACK_STANDDOWN_NONE:
+        snprintf(out, static_cast<size_t>(outLen), "%s is setting the stack sizes.", PSM_NAME);
+        return 1;
+    case STACK_STANDDOWN_OFF:
+        snprintf(out, static_cast<size_t>(outLen), "Installed, but switched off: stacks hold what the game gives them.");
+        return 1;
+    case STACK_STANDDOWN_OTHER_MOD:
+        snprintf(out, static_cast<size_t>(outLen), "Master Stack is installed and sets the stack sizes instead. Change it there.");
+        return 1;
+    case STACK_STANDDOWN_NO_ANCHOR:
+        snprintf(out, static_cast<size_t>(outLen), "This game version keeps its item table somewhere the mod does not recognise, so stacks are "
+                                                  "left alone. An update to %s is needed.", PSM_NAME);
+        return 1;
+    case STACK_STANDDOWN_HOOK_FAILED:
+        snprintf(out, static_cast<size_t>(outLen), "The item table could not be hooked, so stacks are left alone. The log says why.");
+        return 1;
+    case STACK_STANDDOWN_TOO_LATE:
+        snprintf(out, static_cast<size_t>(outLen), "The game read its item table before the mod started, so stacks are the game's own this "
+                                                  "session. A restart fixes it.");
+        return 1;
+    default:
+        snprintf(out, static_cast<size_t>(outLen), "Stacks are not being changed, and this version does not know why (reason %d).", reason);
+        return 0;
+    }
+}
+
+STACK_EXPORT int StackGetMultiplier(void) { return psm::Settings::Get().stackMultiplier; }
+
+STACK_EXPORT int StackApplyMultiplier(int multiplier, char* why, int whyLen)
+{
+    if (why && whyLen > 0) why[0] = 0;
+    if (multiplier < 1 || multiplier > STACK_MAX_MULTIPLIER)
+    {
+        if (why && whyLen > 0) snprintf(why, static_cast<size_t>(whyLen), "the multiplier has to be between 1 and %d", STACK_MAX_MULTIPLIER);
+        return 0;
+    }
+    const auto change = [multiplier](Values& v) { v.stackMultiplier = multiplier; };
+    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
 }

@@ -12,4 +12,6 @@
 #define PSM_GAME     "2.02.00/2.03.00"
 // Base name of the plugin's files next to it: PrivateStorageMaster.asi, .ini, .log.
 #define PSM_FILEBASE L"PrivateStorageMaster"
+// The same as narrow text, for the module name another plugin looks us up by.
+#define PSM_MODULE   "PrivateStorageMaster.asi"
 #define PSM_INI      L"PrivateStorageMaster.ini"
