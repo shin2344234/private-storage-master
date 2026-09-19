@@ -12,6 +12,7 @@
 #include "game/farhook.h"
 #include "game/mem.h"
 #include "storage/inventory.h"
+#include "storage/stacks.h"
 #include "storage/storage.h"
 
 namespace psm::capacity
@@ -227,6 +228,14 @@ namespace psm::capacity
                 else
                     LOG_NOTE("[dump]   record %2u %-26s default %4u max %4u", i, name, d, m);
             }
+            const stacks::Report st = stacks::Status();
+            if (st.reason == stacks::kApplying)
+                LOG_NOTE("[dump] stacks x%d: %d items raised, the biggest now %lld, %d items the game does not stack left alone", st.multiplier,
+                         st.patched, static_cast<long long>(st.biggest), st.unstackable);
+            else if (st.reason == stacks::kOtherMod)
+                LOG_NOTE("[dump] stacks: Master Stack is installed and sets them");
+            else if (st.reason != stacks::kOff)
+                LOG_NOTE("[dump] stacks: asked for, but not applied (reason %d); see the errors above", static_cast<int>(st.reason));
             const uintptr_t holder = PlayerHolder();
             uintptr_t barr = 0;
             uint32_t bn = 0;

@@ -42,6 +42,10 @@ namespace psm::Settings
     // them, so it is never a place loot is stored.
     inline constexpr int kTownWarehouse = 7;
     inline constexpr int kNeverMoveMax = 64;
+    // The largest multiple a stack limit is raised by. The per-item ceiling in
+    // storage/stacks stops the result running away; this stops a typo like
+    // 100000 from turning every small stack into a huge one.
+    inline constexpr int kMaxStackMultiplier = 1000;
 
     struct Values
     {
@@ -65,6 +69,10 @@ namespace psm::Settings
         // counts purchased expansions in its total, the others are the base size.
         int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
         int  privateStorageExpansions = -1;  // -1: learn them from the save
+        // How much of one item a slot holds, as a multiple of the game's own
+        // limit for that item. 1 changes nothing and installs no hook. Read once
+        // at startup, like the slot counts above.
+        int  stackMultiplier = 1;
         bool imported = false;               // settings came from PrivateStorageAnywhere.ini
 
         // Loot straight into storage. Master Looter reports each pickup through

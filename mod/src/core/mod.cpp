@@ -8,6 +8,7 @@
 #include "game/farhook.h"
 #include "game/mem.h"
 #include "storage/capacity.h"
+#include "storage/stacks.h"
 #include "storage/storage.h"
 #include "version.h"
 
@@ -37,10 +38,13 @@ namespace
         const DWORD started = GetTickCount();
         // Storage sizes first: they only reach storage built after the hook is in.
         psm::capacity::Start();
+        // The same for stack sizes: the item table is read once, early.
+        psm::stacks::Start();
 
         // Opening storage waits until the game has built its UI objects.
         while (!g_stop.load() && GetTickCount() - started < 10000) Sleep(250);
         if (g_stop.load()) return 0;
+        psm::stacks::Flush();
         g_storageStarted = psm::storage::Start();
         LOG_NOTE("[mod] %s", g_storageStarted ? "ready" : "storage keys are off; see the errors above");
         return 0;
@@ -78,6 +82,7 @@ namespace psm::Mod
             g_thread = nullptr;
         }
         if (g_storageStarted) storage::Stop();
+        stacks::Stop();
         capacity::Stop();
         farhook::RemoveAll();
         Log::Shutdown();

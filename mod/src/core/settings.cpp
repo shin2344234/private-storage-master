@@ -296,6 +296,21 @@ namespace psm::Settings
                     "PrivateStorageExpansions=%d\n",
                     v.privateStorageExpansions);
             fprintf(f,
+                    "\n[ItemStacks]\n\n"
+                    "; How much of one item a single slot holds, as a multiple of the game's own\n"
+                    "; limit. 1 leaves every stack alone. 5 turns a stack of 100 into 500 and a\n"
+                    "; stack of 20 into 100, so the game's own differences between item kinds\n"
+                    "; stay. Items the game does not stack, like gear and quest items, never\n"
+                    "; start stacking, and no stack is taken past 999999. An item the game\n"
+                    "; already lets you hold more of than that, such as money, is left alone.\n"
+                    "; No game file is edited, and the change takes effect the next time the game\n"
+                    "; starts. Your save does record the bigger stacks you build, so if you set\n"
+                    "; this back to 1 a slot can still hold more than the game allows. It keeps\n"
+                    "; what is in it until you take some out. Empty the big stacks first.\n"
+                    "; Do not run a stack-size data mod such as Fat Stacks at the same time.\n"
+                    "StackMultiplier=%d\n",
+                    v.stackMultiplier);
+            fprintf(f,
                     "\n[AutoStore]\n\n"
                     "; Loot straight into storage. Needs Master Looter 1.6.28 or later; on its own\n"
                     "; this section does nothing. Master Looter reports what it picks up (auto-loot,\n"
@@ -409,6 +424,7 @@ namespace psm::Settings
                 else if (_stricmp(key, "HousingChests1000") == 0) { for (int i = 1; i <= 4; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "CampStorage1000") == 0) { for (int i = 5; i <= 8; ++i) out.slots[i] = atoi(val) ? 1000 : 0; }
                 else if (_stricmp(key, "PrivateStorageExpansions") == 0) out.privateStorageExpansions = atoi(val);
+                else if (_stricmp(key, "StackMultiplier") == 0) out.stackMultiplier = atoi(val);
                 else if (_stricmp(key, "AutoStore") == 0) out.autoStore = atoi(val) != 0;
                 else if (_stricmp(key, "AutoStoreOnlyGained") == 0) out.autoStoreOnlyGained = atoi(val) != 0;
                 else if (_stricmp(key, "AutoStoreNeverMove") == 0) ParseItemList(val, out);
@@ -467,6 +483,8 @@ namespace psm::Settings
                 if (s > kMaxSlots) s = kMaxSlots;
                 if (kFixedSlots[i]) s = kFixedSlots[i];
             }
+            if (v.stackMultiplier < 1) v.stackMultiplier = 1;
+            if (v.stackMultiplier > kMaxStackMultiplier) v.stackMultiplier = kMaxStackMultiplier;
             if (v.privateStorageExpansions < -1) v.privateStorageExpansions = -1;
             if (v.privateStorageExpansions > kMaxSlots) v.privateStorageExpansions = kMaxSlots;
             v.autoStoreTo[kTownWarehouse] = false;
@@ -534,6 +552,7 @@ namespace psm::Settings
                      "PrivateStorageExpansions=%d", v.enabled ? 1 : 0, v.debugLog ? 1 : 0, KeyText(v.dumpKey, a, sizeof a),
                      v.hideKeysWithModifier ? 1 : 0, KeyText(v.hideKeysToggleKey, b, sizeof b), v.leaveCapacityAlone ? 1 : 0,
                      v.privateStorageExpansions);
+            if (v.stackMultiplier > 1) LOG_NOTE("[settings] StackMultiplier=%d", v.stackMultiplier);
             if (v.autoStore)
             {
                 char to[128] = "";
@@ -711,7 +730,8 @@ namespace psm::Settings
     {
         const Values& a = Get();
         const Values& b = Startup();
-        if (a.enabled != b.enabled || a.leaveCapacityAlone != b.leaveCapacityAlone || a.privateStorageExpansions != b.privateStorageExpansions)
+        if (a.enabled != b.enabled || a.leaveCapacityAlone != b.leaveCapacityAlone || a.privateStorageExpansions != b.privateStorageExpansions ||
+            a.stackMultiplier != b.stackMultiplier)
             return true;
         for (int i = 0; i < kStorages; ++i)
             if (a.slots[i] != b.slots[i]) return true;

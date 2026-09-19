@@ -37,7 +37,13 @@ namespace psm::addr
         uintptr_t inventoryHolderOf = 0;   // R3C 1.2: GetInventoryHolder(actor), follows a borrowed bag
     };
 
+    struct Stacks
+    {
+        uintptr_t itemInfoRead = 0;   // (stream, ItemInfo record) -> bool
+    };
+
     // Each returns false and logs what is missing.
     bool ResolveStorage(Storage& out);
     bool ResolveCapacity(Capacity& out);
+    bool ResolveStacks(Stacks& out);
 }
