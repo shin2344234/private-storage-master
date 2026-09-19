@@ -232,6 +232,13 @@ namespace psm::addr
             "48 8D A8 98 F6 FF FF 48 81 EC 28 0A 00 00 C5 F8 29 70 A8 C5 F8 29 78 98");
         if (move && FindWithin(move, 0x100, "48 8B 49 30 E8 ?? ?? ?? ?? 90 44 8B 85 88 09 00 00")) c.clientMoveItem = move;
         else if (move) LOG_ERR("[addr] ClientMoveItem at +%llX no longer looks up both actors the way it did on 2.02", R(move));
+
+        // The game's own holder lookup. A character whose info says mode 1 keeps
+        // no bag of its own and uses another actor's, [[actor+0xA0]+0xD0], which is
+        // how Damiane and Oongka reach the shared bag. One hit on 2850 (+0x2074BA0)
+        // and on 2944 (+0x212A0F0); the mode byte moved from +0x5E to +0x5F between
+        // them, which is why the game decides rather than the mod.
+        c.inventoryHolderOf = Unique("GetInventoryHolder", "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 48 20 0F B7 41 30");
         return c.inventoryInfoRead && c.invMgrGlobal;
     }
 }

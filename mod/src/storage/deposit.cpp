@@ -162,14 +162,18 @@ namespace psm::deposit
             uint32_t actor = 0;   // the key the move is sent for (R5, character +0x60)
         };
 
+        // The bag of whoever is being played. As Damiane or Oongka that is a bag
+        // they borrow, so the move goes out for the actor that owns it, not the
+        // character on screen: the server looks up both sides' holders by that key.
         bool ReadBag(Bag& b)
         {
-            const uintptr_t ch = inv::PlayerCharacter();
-            b.holder = inv::PlayerHolder();
+            b.holder = inv::PlayerBag();
             b.index = inv::IndexByName("Character");
             b.record = inv::RecordByName("Character");
             b.bucket = b.index >= 0 ? inv::BucketByIndex(b.holder, static_cast<uint16_t>(b.index)) : 0;
-            return ch && b.holder && b.record && b.bucket && mem::Read32(ch + 0x60, &b.actor) && b.actor != 0;
+            uintptr_t owner = 0;
+            return b.holder && b.record && b.bucket && mem::ReadPtr(b.holder + 8, &owner) && mem::Read32(owner + 0x60, &b.actor) &&
+                   b.actor != 0;
         }
 
         // The newest unlocked stack of the item. Instance ids grow as stacks are
@@ -353,8 +357,12 @@ namespace psm::deposit
     {
         static uint32_t next = 0;
         if (!Available()) { LOG_NOTE("[deposit] the move function was not found, so there is nothing to test"); return; }
+        // The key poller's thread: plain reads only, never the game's holder lookup.
         Bag b;
-        if (!ReadBag(b)) { LOG_NOTE("[deposit] no character or bag right now"); return; }
+        b.holder = inv::PlayerHolder();
+        b.index = inv::IndexByName("Character");
+        b.bucket = b.index >= 0 ? inv::BucketByIndex(b.holder, static_cast<uint16_t>(b.index)) : 0;
+        if (!b.bucket) { LOG_NOTE("[deposit] no character or bag right now"); return; }
         const Settings::Values& v = Settings::Get();
         const uint32_t size = inv::SlotCount(b.bucket);
         inv::Slot s;
@@ -427,8 +435,15 @@ namespace psm::deposit
             if (!j.debug && !v.autoStore) { End(j, kOff); continue; }
             if (NeverMove(v, j.item)) { End(j, kNeverMoved); continue; }
             // Nothing is sent outside free play or with a storage open; the wait for
-            // the bag starts over when play resumes.
-            if (!bag || !canMove) { j.waitingSince = now; continue; }
+            // the bag starts over when play resumes. In free play a bag that cannot
+            // be read ends the job once the wait runs out, so it is reported rather
+            // than held forever.
+            if (!canMove) { j.waitingSince = now; continue; }
+            if (!bag)
+            {
+                if (now - j.waitingSince > kWaitForBagMs) End(j, kNotInBag);
+                continue;
+            }
             if (sends >= kSendsPerFrame || ItemInFlight(j.item, &j)) continue;
             if (Send(j, b, v, now)) ++sends;
         }

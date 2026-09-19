@@ -34,6 +34,7 @@ namespace psm::addr
         uintptr_t invMgrGlobal = 0;
         uintptr_t actorManagerGlobal = 0;
         uintptr_t clientMoveItem = 0;      // R5: client check and send for an inventory-to-inventory move
+        uintptr_t inventoryHolderOf = 0;   // R3C 1.2: GetInventoryHolder(actor), follows a borrowed bag
     };
 
     // Each returns false and logs what is missing.

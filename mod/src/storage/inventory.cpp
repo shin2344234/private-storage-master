@@ -89,13 +89,43 @@ namespace psm::inv
         return ch;
     }
 
+    namespace
+    {
+        // actor->[+0x68]->[+0xB8], accepted only when the holder names the actor as
+        // its owner.
+        uintptr_t OwnHolder(uintptr_t actor)
+        {
+            uintptr_t comp = 0, holder = 0, owner = 0;
+            if (!actor || !mem::ReadPtr(actor + 0x68, &comp) || !mem::ReadPtr(comp + 0xB8, &holder)) return 0;
+            if (!mem::ReadPtr(holder + 8, &owner) || owner != actor) return 0;
+            return holder;
+        }
+
+        using HolderOfFn = uintptr_t(__fastcall*)(uintptr_t actor);
+    }
+
     uintptr_t PlayerHolder()
     {
         const uintptr_t ch = PlayerCharacter();
-        uintptr_t comp = 0, holder = 0, owner = 0;
-        if (!ch || !mem::ReadPtr(ch + 0x68, &comp) || !mem::ReadPtr(comp + 0xB8, &holder)) return 0;
-        if (!mem::ReadPtr(holder + 8, &owner) || owner != ch) return 0;
-        return holder;
+        if (const uintptr_t own = OwnHolder(ch)) return own;
+        // A character with no bag of its own borrows one (R3C 1.2, mode 1). This
+        // path runs off the game thread, so it reads the redirect rather than
+        // calling the game, and only when the character has no holder of its own.
+        uintptr_t link = 0, lender = 0;
+        if (!ch || !mem::ReadPtr(ch + 0xA0, &link) || !mem::ReadPtr(link + 0xD0, &lender) || lender == ch) return 0;
+        return OwnHolder(lender);
+    }
+
+    uintptr_t PlayerBag()
+    {
+        const uintptr_t ch = PlayerCharacter();
+        if (!ch || !g_addr.inventoryHolderOf) return PlayerHolder();
+        uintptr_t holder = 0;
+        __try { holder = reinterpret_cast<HolderOfFn>(g_addr.inventoryHolderOf)(ch); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return PlayerHolder(); }
+        uintptr_t owner = 0;
+        // The owner of a real holder is an actor; take nothing the game did not.
+        return holder && mem::ReadPtr(holder + 8, &owner) && owner ? holder : 0;
     }
 
     uintptr_t BucketByIndex(uintptr_t holder, uint16_t index)

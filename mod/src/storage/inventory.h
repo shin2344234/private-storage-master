@@ -29,6 +29,10 @@ namespace psm::inv
 
     uintptr_t PlayerCharacter();
     uintptr_t PlayerHolder();          // the controlled character's inventory holder (R3C 5)
+    // The same, as the game itself resolves it, borrowed bag included. Game thread
+    // only, since it calls the game's GetInventoryHolder; falls back to
+    // PlayerHolder when that was not found.
+    uintptr_t PlayerBag();
     uintptr_t BucketByIndex(uintptr_t holder, uint16_t index);
 
     struct Slot
