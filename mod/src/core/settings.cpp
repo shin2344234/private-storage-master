@@ -303,8 +303,11 @@ namespace psm::Settings
                     "; stay. Items the game does not stack, like gear and quest items, never\n"
                     "; start stacking, and no stack is taken past 999999. An item the game\n"
                     "; already lets you hold more of than that, such as money, is left alone.\n"
-                    "; No game file is edited, and the change takes effect the next time the game\n"
-                    "; starts. Your save does record the bigger stacks you build, so if you set\n"
+                    "; No game file is edited. A change made here takes effect the next time the\n"
+                    "; game starts, because this file is read once. Raising it from Master Looter's\n"
+                    "; Stacks tab takes hold straight away, as long as you are in free play with no\n"
+                    "; storage open; a smaller number always waits for the next start.\n"
+                    "; Your save does record the bigger stacks you build, so if you set\n"
                     "; this back to 1 a slot can still hold more than the game allows. It keeps\n"
                     "; what is in it until you take some out. Empty the big stacks first.\n"
                     "; Do not run a stack-size data mod such as Fat Stacks at the same time.\n"
@@ -730,8 +733,10 @@ namespace psm::Settings
     {
         const Values& a = Get();
         const Values& b = Startup();
-        if (a.enabled != b.enabled || a.leaveCapacityAlone != b.leaveCapacityAlone || a.privateStorageExpansions != b.privateStorageExpansions ||
-            a.stackMultiplier != b.stackMultiplier)
+        // stackMultiplier is left out on purpose: a raise can take effect without a
+        // restart, so whether stacks need one is storage/stacks' answer to give,
+        // through StackGetStatus, not a comparison against the launch.
+        if (a.enabled != b.enabled || a.leaveCapacityAlone != b.leaveCapacityAlone || a.privateStorageExpansions != b.privateStorageExpansions)
             return true;
         for (int i = 0; i < kStorages; ++i)
             if (a.slots[i] != b.slots[i]) return true;

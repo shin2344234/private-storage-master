@@ -31,6 +31,20 @@ namespace psm::stacks
     void Flush();
     void Stop();
 
+    // Raise the limits already in memory to a bigger multiplier, without a
+    // restart. Only upwards: a slot can hold more than the game allows, so
+    // lowering a limit under a stack that is already over it is left to the next
+    // launch, where the game builds everything from the raised data itself.
+    //
+    // False when it cannot be done now, with the reason in `why`: no hook this
+    // session, a multiplier no higher than the one in force, or anything other
+    // than free play with no storage open. The caller decides what to do next;
+    // the setting is saved either way by whoever called it.
+    bool RaiseNow(int multiplier, char* why, size_t whyLen);
+    // Whether a raise could apply this session at all, which is what the hook
+    // being installed comes down to.
+    bool CanRaiseNow();
+
     struct Report
     {
         bool hooked = false;

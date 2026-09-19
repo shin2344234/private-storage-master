@@ -59,6 +59,12 @@ typedef struct StackStatus
      * numbers the provider is really using. */
     int32_t  ceiling;            /* the most any one stack holds */
     int32_t  maxMultiplier;      /* the largest multiplier it accepts */
+    /* 1 when a bigger multiplier can take effect without a restart, which needs
+     * this mod to be applying already. A smaller one always waits for the next
+     * launch, because a slot holding more than the game allows would be left over
+     * the limit. Read it to word the tab; you do not have to act on it, since
+     * StackApplyMultiplier does the right thing either way. */
+    int32_t  liveRaise;
     int64_t  biggest;            /* the largest limit written */
 } StackStatus;
 
@@ -85,11 +91,18 @@ STACK_API int StackStandDownText(int reason, char* out, int outLen);
 STACK_API int StackGetMultiplier(void);
 
 /* Writes the multiplier to the provider's own ini, between 1 and the
- * maxMultiplier it reports, so a caller never touches a file itself. It takes
- * effect the next time the game starts, so a caller should say so. By the time
- * this returns 1, StackGetStatus reports the new multiplierSetting and the
- * matching restartNeeded. Returns 1 on success, or 0 with a reason in `why`
- * (which may be null). */
+ * maxMultiplier it reports, so a caller never touches a file itself.
+ *
+ * A bigger multiplier than the one in force is applied to the limits already in
+ * memory straight away, when the provider can (liveRaise) and the player is in
+ * free play with no storage screen open. Anything else, including every smaller
+ * multiplier, takes effect the next time the game starts.
+ *
+ * Either way the setting is saved and this returns 1. Read StackGetStatus after
+ * it: `multiplier` is what is in force now and `restartNeeded` is 0 when the
+ * change is already live, 1 when it is waiting for a restart. That is the one
+ * thing to tell the player. Returns 0 only when the value itself is refused,
+ * with a reason in `why` (which may be null). */
 STACK_API int StackApplyMultiplier(int multiplier, char* why, int whyLen);
 
 #ifdef __cplusplus

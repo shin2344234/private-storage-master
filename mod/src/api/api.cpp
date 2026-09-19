@@ -306,11 +306,14 @@ STACK_EXPORT int StackGetStatus(StackStatus* out)
     out->hooked = r.hooked;
     out->multiplier = r.multiplier;
     out->multiplierSetting = psm::Settings::Get().stackMultiplier;
-    out->restartNeeded = out->multiplierSetting != psm::Settings::Startup().stackMultiplier;
+    // Against what is in force, not against what the launch started with: a live
+    // raise makes the two agree, and then no restart is needed.
+    out->restartNeeded = out->multiplierSetting != out->multiplier;
     out->itemsRaised = r.patched;
     out->itemsUnstackable = r.unstackable;
     out->ceiling = STACK_CEILING;
     out->maxMultiplier = STACK_MAX_MULTIPLIER;
+    out->liveRaise = psm::stacks::CanRaiseNow();
     out->biggest = r.biggest;
     return 1;
 }
@@ -357,5 +360,11 @@ STACK_EXPORT int StackApplyMultiplier(int multiplier, char* why, int whyLen)
         return 0;
     }
     const auto change = [multiplier](Values& v) { v.stackMultiplier = multiplier; };
-    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    if (!psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0)) return 0;
+    // Raising can take hold now. Anything else waits for the next launch, which
+    // the caller sees as restartNeeded on its next status read. A refusal there is
+    // not a failure of this call: the setting is saved either way.
+    char note[192];
+    if (!psm::stacks::RaiseNow(multiplier, note, sizeof note)) LOG("[stacks] x%d is saved for the next launch: %s", multiplier, note);
+    return 1;
 }

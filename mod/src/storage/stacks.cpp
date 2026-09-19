@@ -2,12 +2,14 @@
 
 #include <Windows.h>
 #include <atomic>
+#include <cstdio>
 
 #include "core/log.h"
 #include "core/settings.h"
 #include "game/addresses.h"
 #include "game/farhook.h"
 #include "game/mem.h"
+#include "storage/deposit.h"
 
 namespace psm::stacks
 {
@@ -27,9 +29,25 @@ namespace psm::stacks
         // installed, so this one stands down rather than stacking the multipliers.
         constexpr const wchar_t* kOtherProvider = L"MasterStack.asi";
 
+        // Every record the hook raised, so a later multiplier can be worked out
+        // from the game's own limit rather than from a number already multiplied
+        // (the ceiling makes that ratio wrong). Fixed size and filled by loader
+        // threads, which must not allocate: 2397 records were raised on 2.03.00,
+        // so this is roughly three times the room needed.
+        constexpr int kMaxEntries = 8192;
+        struct Entry
+        {
+            uintptr_t rec;
+            int64_t stock;     // the game's own limit
+            int64_t written;   // what the mod last wrote there
+        };
+        Entry g_entries[kMaxEntries];
+        std::atomic<int> g_entryCount{0};
+        std::atomic<bool> g_entriesFull{false};
+
         addr::Stacks g_addr;
         void* oRead = nullptr;
-        int g_multiplier = 1;
+        std::atomic<int> g_multiplier{1};
         std::atomic<bool> g_stop{false};
         std::atomic<bool> g_patching{false};
         std::atomic<bool> g_hooked{false};
@@ -60,7 +78,7 @@ namespace psm::stacks
             // those would let gear, quest items and mounts pile into one slot.
             if (stock <= 1) { ++g_unstackable; return; }
             if (stock >= kCeiling) { ++g_huge; return; }
-            int64_t want = stock * g_multiplier;
+            int64_t want = stock * g_multiplier.load();
             if (want > kCeiling) want = kCeiling;
             if (want <= stock) return;
             __try
@@ -68,6 +86,24 @@ namespace psm::stacks
                 *reinterpret_cast<int64_t*>(rec + kMaxStackCount) = want;
             }
             __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+            // Remembered so RaiseNow can recompute from `stock`. A record the game
+            // reads again lands here again, and the entry is updated rather than
+            // repeated, so the list cannot drift from what the records hold.
+            const int have = g_entryCount.load();
+            int slot = -1;
+            for (int i = 0; i < have; ++i)
+                if (g_entries[i].rec == rec) { slot = i; break; }
+            if (slot < 0)
+            {
+                slot = g_entryCount.fetch_add(1);
+                if (slot >= kMaxEntries)
+                {
+                    g_entryCount.store(kMaxEntries);
+                    g_entriesFull = true;
+                    slot = -1;
+                }
+            }
+            if (slot >= 0) g_entries[slot] = Entry{rec, stock, want};
             ++g_patched;
             if (want > g_biggest.load()) g_biggest = want;
             if (Log::Debug() && g_logged.fetch_add(1) < 10)
@@ -146,10 +182,11 @@ namespace psm::stacks
 
     void Flush()
     {
-        if (g_multiplier <= 1 || !g_hooked.load()) return;
+        const int mult = g_multiplier.load();
+        if (mult <= 1 || !g_hooked.load()) return;
         const int n = g_patched.load();
         if (n)
-            LOG_NOTE("[stacks] %d items stack x%d now, the biggest holding %lld; %d items the game does not stack were left alone", n, g_multiplier,
+            LOG_NOTE("[stacks] %d items stack x%d now, the biggest holding %lld; %d items the game does not stack were left alone", n, mult,
                      static_cast<long long>(g_biggest.load()), g_unstackable.load());
         else
         {
@@ -158,12 +195,64 @@ namespace psm::stacks
         }
     }
 
+    bool CanRaiseNow() { return g_hooked.load() && g_reason.load() == kApplying; }
+
+    bool RaiseNow(int multiplier, char* why, size_t whyLen)
+    {
+        const auto no = [&](const char* text) { if (why && whyLen) snprintf(why, whyLen, "%s", text); return false; };
+        if (!CanRaiseNow())
+            return no("stacks are not being changed this session, so a new multiplier starts with the next launch");
+        const int now = g_multiplier.load();
+        if (multiplier <= now)
+            return no("a smaller multiplier waits for the next launch: a slot already holding more than the game allows "
+                      "would be left over the limit");
+        // The same gate the deposit path uses. A storage or inventory screen reads
+        // these limits when it opens, so changing them underneath one is asking
+        // for a screen that disagrees with the data.
+        if (!deposit::FreePlayNow())
+            return no("raising a stack size needs free play with no storage screen open");
+        const int count = g_entryCount.load();
+        int changed = 0, skipped = 0;
+        int64_t biggest = 0;
+        for (int i = 0; i < count && i < kMaxEntries; ++i)
+        {
+            Entry& e = g_entries[i];
+            int64_t want = e.stock * multiplier;
+            if (want > kCeiling) want = kCeiling;
+            if (want <= e.written) continue;   // already there, ceiling reached
+            int64_t live = 0;
+            // Only a record still holding exactly what this mod wrote is touched.
+            // Anything else is the game's or another mod's now, and is left alone.
+            if (!mem::ReadBytes(e.rec + kMaxStackCount, &live, sizeof live) || live != e.written) { ++skipped; continue; }
+            __try
+            {
+                // Eight bytes, aligned, so a reader on the game's thread sees the
+                // old limit or the new one and never half of either.
+                *reinterpret_cast<int64_t*>(e.rec + kMaxStackCount) = want;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { ++skipped; continue; }
+            e.written = want;
+            if (want > biggest) biggest = want;
+            ++changed;
+        }
+        // Records the game reads after this get the new multiplier too.
+        g_multiplier.store(multiplier);
+        if (biggest > g_biggest.load()) g_biggest = biggest;
+        LOG_NOTE("[stacks] raised to x%d without a restart: %d items changed, the biggest now %lld%s", multiplier, changed,
+                 static_cast<long long>(biggest), skipped ? ", some left alone because something else had changed them" : "");
+        if (skipped) LOG("[stacks] %d records were not what the mod last wrote, so they were left alone", skipped);
+        if (g_entriesFull.load())
+            LOG_ERR("[stacks] more than %d items were raised at startup, so the ones past that keep the old multiplier until the next launch",
+                    kMaxEntries);
+        return true;
+    }
+
     Report Status()
     {
         Report r;
         r.hooked = g_hooked.load();
         r.reason = static_cast<Reason>(g_reason.load());
-        r.multiplier = r.reason == kApplying ? g_multiplier : 1;
+        r.multiplier = r.reason == kApplying ? g_multiplier.load() : 1;
         r.patched = g_patched.load();
         r.biggest = g_biggest.load();
         r.unstackable = g_unstackable.load();
