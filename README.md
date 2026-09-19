@@ -8,7 +8,8 @@ Crimson Desert 2.02.00 and 2.03.00.
 New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/3402)
 1.6.28 or later installed too, what Master Looter picks up goes straight into
 your storage. Ore and plants go to the Gatherables Chest, food to the Kuku
-Cooler, collectibles to the Collectibles Chest. Only what was just picked up
+Cooler, collectibles to the Collectibles Chest. Since 1.1.1, with Master Looter
+1.6.29, it works as Damiane and Oongka too. Only what was just picked up
 moves and money stays with you. It is off until you tick "Put what Master
 Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
 needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
@@ -35,11 +36,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.0:
+SHA-256 for 1.1.1:
 
-    b1d99b6046128d8af714886c6e453698a5805a453e6d8033630cdb177f7b9be4  PrivateStorageMaster-1.1.0-DMM.zip
-    311a5fe20ddc18e862c863bc5c0572fc20301f590c13596f30a18c222360261c  PrivateStorageMaster-1.1.0.zip
-    639ae21424a1795964ef0942b6193ef1ab94b2689ce95cae7c61175e2fe20fe9  PrivateStorageMaster.asi
+    f95678c3d29fef122d26e02549d1d3aba6fc608c7b6274e7971420b35700670b  PrivateStorageMaster-1.1.1-DMM.zip
+    9b196041e9b17c3100d065833fa5580174c94e9fb2097af88fea1b2ab64c9216  PrivateStorageMaster-1.1.1.zip
+    7fe333c8ef7400ac2effdbbaa631eedfd1ef0f7a682900bb4c822757a5e094bc  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

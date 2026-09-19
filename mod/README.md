@@ -1,4 +1,4 @@
-Private Storage Master 1.1.0 for Crimson Desert 2.02.00 and 2.03.00
+Private Storage Master 1.1.1 for Crimson Desert 2.02.00 and 2.03.00
 ===================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -63,7 +63,9 @@ Each time something is stored, a notice such as "Stored 3 items: Kuku Cooler
 3" comes up. "Show a notice when loot is stored" on the same tab turns it off.
 
 Needs: Master Looter 1.6.28 or later, this plugin 1.1.0 or later, and Master
-Looter looting (auto-loot on, or its loot-everything key). With an older
+Looter looting (auto-loot on, or its loot-everything key). Playing as Damiane
+or Oongka, who carry Kliff's bag, needs Master Looter 1.6.29 and this plugin
+1.1.1. With an older
 Master Looter nothing happens; with an older Private Storage Master the tab
 says "Storing loot needs a newer Private Storage Master."
 

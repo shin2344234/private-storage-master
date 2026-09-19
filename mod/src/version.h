@@ -1,7 +1,7 @@
 #pragma once
 
 // Bump it with the release that goes with it, never on its own.
-#define PSM_VERSION  "1.1.0"
+#define PSM_VERSION  "1.1.1"
 #define PSM_NAME     "Private Storage Master"
 // The game builds the plugin was last checked against. 2.03.00 is exe
 // 1.0.0.2944, released 17 September 2026, and 2.02.00 is 1.0.0.2850. Every
