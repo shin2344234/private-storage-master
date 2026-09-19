@@ -504,54 +504,19 @@ namespace psm::storage
             return false;
         }
 
-        // Keyboard keys the game's own input map pairs with Ctrl or with LB, its pad
-        // twin, which Ctrl never holds back. Read from ui/inputmap.xml and
-        // inputmap_common.xml, the same on 1.0.0.2850 and 1.0.0.2944. Ctrl alone is
-        // the guard, and the map pairs the guard with other keys two ways: a
-        // keyboard chord on Ctrl, or a pad chord on LB whose keyboard key is bare.
-        // Z is the second kind, Key_Skill_13 (LB+LT on the pad), so the game reads
-        // Ctrl+Z as guard plus Z. Shift (MouseCursorToggle) and "+"
-        // (Debug_FreeCamWithCharacterKeyBoard) are the first kind, both debug;
-        // "+" is taken as either plus key. Ctrl is also Examine
-        // (Gimmick_AimInteraction, OverrideKey1 in inputmap_common.xml), and while
-        // it is held the GimmickInput layer reads Q and E (previous and next), R and
-        // T (actions 1 and 2), and W, A, S, D, which already pass. That is how an NPC
-        // is traded with or talked to on Ctrl+R and Ctrl+E. Every other pairing is
-        // with the mouse, which the block never touches.
-        bool GameUsesWithCtrl(uint8_t vk)
+        // Keys held back from the game while a storage modifier is down: the
+        // function keys, the row every default storage key sits on, so a slip
+        // from Ctrl+F1 to F2 or F3 cannot fire the game's own F key. Nothing else.
+        // Ctrl is the game's guard and Examine, and players press every other key
+        // with it held: Ctrl+F kicks while guarding (Key_KickAttack, plain F), and
+        // while Examine is up the game reads Q, E, R, T and G as plain keys to
+        // talk, trade and give gifts (GimmickInput, InteractionX to B). 1.0.1 and
+        // 1.1.0 held back everything but a pass list and kept losing those. Alt+F4
+        // always goes through.
+        bool HoldBackWithModifier(uint8_t vk, uint8_t mods)
         {
-            switch (vk)
-            {
-            case 'Z':
-            case 'Q': case 'E': case 'R': case 'T':
-            case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
-            case VK_OEM_PLUS: case VK_ADD:
-                return true;
-            default:
-                return false;
-            }
-        }
-
-        // Keys the game keeps while a storage modifier is held: the ones it pairs
-        // with Ctrl itself, plus movement, the modifiers and the system keys, which
-        // pass whatever the input map says so a player can still move while guarding.
-        bool PassWithModifier(uint8_t vk, uint8_t mods)
-        {
-            if ((mods & Settings::kModCtrl) && GameUsesWithCtrl(vk)) return true;
-            switch (vk)
-            {
-            case 'W': case 'A': case 'S': case 'D':
-            case VK_UP: case VK_DOWN: case VK_LEFT: case VK_RIGHT:
-            case VK_SPACE: case VK_TAB: case VK_RETURN: case VK_ESCAPE:
-            case VK_SHIFT: case VK_CONTROL: case VK_MENU:
-            case VK_LSHIFT: case VK_RSHIFT: case VK_LCONTROL: case VK_RCONTROL: case VK_LMENU: case VK_RMENU:
-            case VK_LWIN: case VK_RWIN: case VK_CAPITAL: case VK_SNAPSHOT:
-                return true;
-            case VK_F4:
-                return (mods & Settings::kModAlt) != 0;   // Alt+F4 closes the game
-            default:
-                return false;
-            }
+            if (vk < VK_F1 || vk > VK_F12) return false;
+            return !(vk == VK_F4 && (mods & Settings::kModAlt));
         }
 
         // Hands a message to the procedure that window had before ours.
@@ -574,7 +539,7 @@ namespace psm::storage
                 const uint8_t mods = HeldMods();
                 const int b = Binding(vk, mods);
                 g_eatChar = false;
-                const bool lockout = b == -1 && Settings::Get().hideKeysWithModifier && ModsInUse(mods) && !PassWithModifier(vk, mods);
+                const bool lockout = b == -1 && Settings::Get().hideKeysWithModifier && ModsInUse(mods) && HoldBackWithModifier(vk, mods);
                 if (b != -1 || lockout)
                 {
                     // Only hidden here. The poller acts on it, reading the keyboard the way

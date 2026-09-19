@@ -264,13 +264,10 @@ namespace psm::Settings
             fprintf(f,
                     "; Writes the size and contents count of every storage to the log.\n"
                     "CapacityDumpKey=%s\n\n"
-                    "; 1 keeps other keys from the game while a modifier your storage keys use is\n"
-                    "; held, so a slip off a storage key does not fire a skill. Movement\n"
-                    "; (W, A, S, D, arrows), Space, Tab, Enter, Escape and Alt+F4 still go through.\n"
-                    "; Keys the game itself uses with Ctrl go through as well: Q, E, R and T for\n"
-                    "; examining and talking or trading with Ctrl held, and Z, Shift and +. Ctrl is\n"
-                    "; also the game's guard and lock-on key, so other keys you press while guarding\n"
-                    "; are held back. Mouse buttons never are.\n"
+                    "; 1 keeps F1 to F12 from the game while a modifier your storage keys use is\n"
+                    "; held, so a slip from one storage key to the next F key does not reach the\n"
+                    "; game. Every other key goes through, so kicking, talking, trading and giving\n"
+                    "; gifts with Ctrl held work as usual. Alt+F4 always closes the game.\n"
                     "HideKeysWithModifier=%d\n\n"
                     "; Turns HideKeysWithModifier on and off while you play, and saves it. None for no key.\n"
                     "HideKeysToggleKey=%s\n\n",
