@@ -14,6 +14,7 @@
 #include "game/mem.h"
 #include "storage/capacity.h"
 #include "storage/deposit.h"
+#include "storage/inventory.h"
 #include "storage/pad.h"
 
 namespace psm::storage
@@ -342,6 +343,7 @@ namespace psm::storage
             g_lastTick = GetTickCount();
             // Loot moves only in free play, with no storage open or about to open,
             // so a deposit never races the warehouse screen.
+            inv::RefreshPlayerBag();
             deposit::Tick(g_freePlay.load() && !g_open.load() && g_switchTo < 0);
 
             if (g_switchTo >= 0 && !g_open.load())

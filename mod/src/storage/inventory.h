@@ -28,11 +28,15 @@ namespace psm::inv
     int IndexByName(const char* want);
 
     uintptr_t PlayerCharacter();
-    uintptr_t PlayerHolder();          // the controlled character's inventory holder (R3C 5)
-    // The same, as the game itself resolves it, borrowed bag included. Game thread
-    // only, since it calls the game's GetInventoryHolder; falls back to
-    // PlayerHolder when that was not found.
+    // The bag of whoever is being played, as the game itself resolves it, borrowed
+    // bag included (Damiane and Oongka use Kliff's). Game thread only, since it
+    // calls the game's GetInventoryHolder.
     uintptr_t PlayerBag();
+    // Game thread, every frame: publishes PlayerBag for the other threads.
+    void RefreshPlayerBag();
+    // Any thread: the bag the last frame published, or plain reads when no frame
+    // has run in the last second (R3C 5).
+    uintptr_t PlayerHolder();
     uintptr_t BucketByIndex(uintptr_t holder, uint16_t index);
 
     struct Slot

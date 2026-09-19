@@ -102,30 +102,51 @@ namespace psm::inv
         }
 
         using HolderOfFn = uintptr_t(__fastcall*)(uintptr_t actor);
-    }
 
-    uintptr_t PlayerHolder()
-    {
-        const uintptr_t ch = PlayerCharacter();
-        if (const uintptr_t own = OwnHolder(ch)) return own;
-        // A character with no bag of its own borrows one (R3C 1.2, mode 1). This
-        // path runs off the game thread, so it reads the redirect rather than
-        // calling the game, and only when the character has no holder of its own.
-        uintptr_t link = 0, lender = 0;
-        if (!ch || !mem::ReadPtr(ch + 0xA0, &link) || !mem::ReadPtr(link + 0xD0, &lender) || lender == ch) return 0;
-        return OwnHolder(lender);
+        // Plain reads, for when the game's lookup is missing or has not run yet.
+        // The character's own holder first, then the one it borrows (R3C 1.2).
+        // Damiane has a holder of her own that the game never uses (0 of 50 on
+        // 19 September), so this can pick the wrong bag; the game's answer below
+        // replaces it once a frame has run.
+        uintptr_t ReadHolder()
+        {
+            const uintptr_t ch = PlayerCharacter();
+            if (const uintptr_t own = OwnHolder(ch)) return own;
+            uintptr_t link = 0, lender = 0;
+            if (!ch || !mem::ReadPtr(ch + 0xA0, &link) || !mem::ReadPtr(link + 0xD0, &lender) || lender == ch) return 0;
+            return OwnHolder(lender);
+        }
+
+        // The game's answer, published by the frame tick for the other threads.
+        std::atomic<uintptr_t> g_bag{0};
+        std::atomic<ULONGLONG> g_bagAt{0};
+        constexpr ULONGLONG kBagFreshMs = 1000;
     }
 
     uintptr_t PlayerBag()
     {
         const uintptr_t ch = PlayerCharacter();
-        if (!ch || !g_addr.inventoryHolderOf) return PlayerHolder();
+        if (!ch || !g_addr.inventoryHolderOf) return ReadHolder();
         uintptr_t holder = 0;
         __try { holder = reinterpret_cast<HolderOfFn>(g_addr.inventoryHolderOf)(ch); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return PlayerHolder(); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return ReadHolder(); }
         uintptr_t owner = 0;
         // The owner of a real holder is an actor; take nothing the game did not.
         return holder && mem::ReadPtr(holder + 8, &owner) && owner ? holder : 0;
+    }
+
+    void RefreshPlayerBag()
+    {
+        if (!Ready() || !g_addr.inventoryHolderOf) return;
+        g_bag.store(PlayerBag(), std::memory_order_relaxed);
+        g_bagAt.store(GetTickCount64(), std::memory_order_release);
+    }
+
+    uintptr_t PlayerHolder()
+    {
+        const ULONGLONG at = g_bagAt.load(std::memory_order_acquire);
+        if (at && GetTickCount64() - at <= kBagFreshMs) return g_bag.load(std::memory_order_relaxed);
+        return ReadHolder();
     }
 
     uintptr_t BucketByIndex(uintptr_t holder, uint16_t index)
