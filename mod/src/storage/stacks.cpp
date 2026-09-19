@@ -201,11 +201,11 @@ namespace psm::stacks
     {
         const auto no = [&](const char* text) { if (why && whyLen) snprintf(why, whyLen, "%s", text); return false; };
         if (!CanRaiseNow())
-            return no("stacks are not being changed this session, so a new multiplier starts with the next launch");
+            return no("stacks are not being changed at all this session");
         const int now = g_multiplier.load();
         if (multiplier <= now)
-            return no("a smaller multiplier waits for the next launch: a slot already holding more than the game allows "
-                      "would be left over the limit");
+            return no("a smaller multiplier cannot touch stacks already built, because a slot holding more than the game "
+                      "allows would be left stranded over the limit");
         // The same gate the deposit path uses. A storage or inventory screen reads
         // these limits when it opens, so changing them underneath one is asking
         // for a screen that disagrees with the data.

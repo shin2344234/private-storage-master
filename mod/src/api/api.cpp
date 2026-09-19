@@ -372,6 +372,6 @@ STACK_EXPORT int StackApplyMultiplier(int multiplier, char* why, int whyLen)
     // the caller sees as restartNeeded on its next status read. A refusal there is
     // not a failure of this call: the setting is saved either way.
     char note[192];
-    if (!psm::stacks::RaiseNow(multiplier, note, sizeof note)) LOG("[stacks] x%d is saved for the next launch: %s", multiplier, note);
+    if (!psm::stacks::RaiseNow(multiplier, note, sizeof note)) LOG("[stacks] x%d is saved for the next launch. Not now, because %s.", multiplier, note);
     return 1;
 }
