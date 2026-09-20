@@ -5,6 +5,13 @@ camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
 Crimson Desert 2.02.00 and 2.03.00.
 
+New in 1.1.2: `StackMultiplier` raises how much of an item one slot holds, as a
+multiple of the game's own limit for that item, which is the Fat Stacks idea done
+without replacing any game data. It is 1, off, until you change it. The same
+feature ships as its own mod, [Stack Master](https://www.nexusmods.com/crimsondesert/mods/3548),
+for people who want bigger stacks and not the storage mod; with both installed
+Stack Master applies and this one stands down.
+
 New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/3402)
 1.6.28 or later installed too, what Master Looter picks up goes straight into
 your storage. Ore and plants go to the Gatherables Chest, food to the Kuku
@@ -23,6 +30,9 @@ It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 - For other plugins: [mod/include/psm_api.h](mod/include/psm_api.h) is the
   versioned C interface Master Looter's Storage tab uses, including
   PsmDeposit, PsmDepositResults and PsmFreePlay for loot storing.
+  [mod/include/stack_api.h](mod/include/stack_api.h) is the separate interface
+  for stack sizes, which Stack Master exports under the same names, so a caller
+  works with whichever of the two is installed.
 
 ## Antivirus
 
@@ -36,11 +46,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.1:
+SHA-256 for 1.1.2:
 
-    f95678c3d29fef122d26e02549d1d3aba6fc608c7b6274e7971420b35700670b  PrivateStorageMaster-1.1.1-DMM.zip
-    9b196041e9b17c3100d065833fa5580174c94e9fb2097af88fea1b2ab64c9216  PrivateStorageMaster-1.1.1.zip
-    7fe333c8ef7400ac2effdbbaa631eedfd1ef0f7a682900bb4c822757a5e094bc  PrivateStorageMaster.asi
+    3b3c995fa88f5b52589078c3e8eb29a44ef88f6f0085468f948f0126b866fc36  PrivateStorageMaster-1.1.2-DMM.zip
+    030806d953c5a496720767fee673d4eefda0815ab1c32887917708445e573705  PrivateStorageMaster-1.1.2.zip
+    141dc7a3662dbfdf53897821add7747316584095298df83a65a9fe221257b598  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

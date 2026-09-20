@@ -275,7 +275,7 @@ PSM_EXPORT int PsmPadText(PsmPad pad, char* out, int outLen)
 }
 
 // ---------------------------------------------------------------- stack sizes
-// include/stack_api.h, the interface Master Stack exports under the same names,
+// include/stack_api.h, the interface Stack Master exports under the same names,
 // so Master Looter's Stacks tab can talk to whichever of the two is installed.
 #define STACK_API __declspec(dllexport)
 #include "stack_api.h"
@@ -337,7 +337,7 @@ STACK_EXPORT int StackStandDownText(int reason, char* out, int outLen)
         snprintf(out, static_cast<size_t>(outLen), "Installed, but switched off: stacks hold what the game gives them.");
         return 1;
     case STACK_STANDDOWN_OTHER_MOD:
-        snprintf(out, static_cast<size_t>(outLen), "Master Stack is installed and sets the stack sizes instead. Change it there.");
+        snprintf(out, static_cast<size_t>(outLen), "Stack Master is installed and sets the stack sizes instead. Change it there.");
         return 1;
     case STACK_STANDDOWN_NO_ANCHOR:
         snprintf(out, static_cast<size_t>(outLen), "This game version keeps its item table somewhere the mod does not recognise, so stacks are "

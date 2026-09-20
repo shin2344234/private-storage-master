@@ -1,8 +1,9 @@
-Private Storage Master 1.1.1 for Crimson Desert 2.02.00 and 2.03.00
+Private Storage Master 1.1.2 for Crimson Desert 2.02.00 and 2.03.00
 ===================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
-storage's size, and with Master Looter puts your loot straight into storage.
+storage's size, raises how much one slot holds of an item, and with Master
+Looter puts your loot straight into storage.
 
 Install
 -------
@@ -94,6 +95,38 @@ on F, talking and trading on E and R, gifts on G, the weapon swap on Z.
 Alt+F4 always works. Ctrl+F10 turns it off and on and saves the choice;
 HideKeysWithModifier and HideKeysToggleKey in the ini set the same thing.
 
+Bigger stacks
+-------------
+
+New in 1.1.2. StackMultiplier in the [ItemStacks] section of the ini sets how
+much of an item one slot holds, as a multiple of the game's own limit for that
+item. 1, the default, changes nothing and the mod does not touch stacks at all.
+5 turns a stack of 100 into 500 and a stack of 20 into 100, so the game's own
+differences between item kinds stay.
+
+    StackMultiplier=5
+
+Editing the ini takes effect the next time the game starts. From Master Looter
+1.6.33's Stacks tab, raising it takes hold straight away while you are in free
+play with no storage open, and a smaller number waits for the next start.
+
+No game file is changed: the game reads its item table as it starts and the mod
+raises each item's own limit as that happens, which is why a game patch does not
+break it.
+
+Items the game does not stack, such as gear and quest items, never start
+stacking. No stack goes past 999999, and an item the game already lets you hold
+more of than that, like money, is left as it is.
+
+Turning it back down does not shrink stacks you already built. A slot holding
+more than the game allows keeps what is in it until you take some out, so empty
+the big stacks before setting it back to 1.
+
+Stack Master, the same feature as its own mod, can be used instead. With both
+installed Stack Master is the one that applies, this mod leaves stacks alone and
+says so in the log, and the multiplier to change is the one in StackMaster.ini.
+Do not run a stack-size data mod such as Fat Stacks as well.
+
 Sizes
 -----
 
@@ -104,13 +137,14 @@ Collectibles Chest is always 958. LeaveCapacityAlone=1 turns every size off,
 for use with JSON capacity mods.
 
 With Master Looter installed, its menu has a Storage tab for all of this,
-loot storing included.
+loot storing included, and from 1.6.33 a Stacks tab for the multiplier above.
 
 Reporting a problem
 -------------------
 
 Set DebugLog=1, play until it happens, close the game and attach
-PrivateStorageMaster.log from bin64. The two sessions before it are kept as
+PrivateStorageMaster.log from bin64. For stacks the log says how many items were
+raised and the biggest limit written, and names the first ten. The two sessions before it are kept as
 PrivateStorageMaster.01.log and .02.log, or the last 24 with DebugLog=1. For
 loot storing, attach MasterLooter.log too; with DebugLog=1 every item moved
 or left in the bag is in PrivateStorageMaster.log with the reason.

@@ -233,7 +233,7 @@ namespace psm::capacity
                 LOG_NOTE("[dump] stacks x%d: %d items raised, the biggest now %lld, %d items the game does not stack left alone", st.multiplier,
                          st.patched, static_cast<long long>(st.biggest), st.unstackable);
             else if (st.reason == stacks::kOtherMod)
-                LOG_NOTE("[dump] stacks: Master Stack is installed and sets them");
+                LOG_NOTE("[dump] stacks: Stack Master is installed and sets them");
             else if (st.reason != stacks::kOff)
                 LOG_NOTE("[dump] stacks: asked for, but not applied (reason %d); see the errors above", static_cast<int>(st.reason));
             const uintptr_t holder = PlayerHolder();

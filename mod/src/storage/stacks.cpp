@@ -27,7 +27,7 @@ namespace psm::stacks
         constexpr int64_t kCeiling = 999999;
         // The standalone mod. Seth's decision is that it wins when both are
         // installed, so this one stands down rather than stacking the multipliers.
-        constexpr const wchar_t* kOtherProvider = L"MasterStack.asi";
+        constexpr const wchar_t* kOtherProvider = L"StackMaster.asi";
 
         // Every record the hook raised, so a later multiplier can be worked out
         // from the game's own limit rather than from a number already multiplied
@@ -58,7 +58,7 @@ namespace psm::stacks
         std::atomic<int> g_huge{0};
         std::atomic<int> g_logged{0};
 
-        // Master Stack loaded in this process. The export decides, not the name
+        // Stack Master loaded in this process. The export decides, not the name
         // alone, so a renamed or half-installed file is not mistaken for it.
         bool OtherProviderLoaded()
         {
@@ -135,8 +135,8 @@ namespace psm::stacks
         if (OtherProviderLoaded())
         {
             g_reason = kOtherMod;
-            LOG_NOTE("[stacks] Master Stack is installed, so it sets the stack sizes and this mod leaves them alone. "
-                     "Change the multiplier in MasterStack.ini, not here.");
+            LOG_NOTE("[stacks] Stack Master is installed, so it sets the stack sizes and this mod leaves them alone. "
+                     "Change the multiplier in StackMaster.ini, not here.");
             return;
         }
         // The same retry as capacity: early in a launch the game has not finished
@@ -155,7 +155,7 @@ namespace psm::stacks
             LOG_ERR("[stacks] the item table reader was not found in this game version, so stack sizes are left alone");
             return;
         }
-        // The ASI loader may not have reached MasterStack.asi when this started,
+        // The ASI loader may not have reached StackMaster.asi when this started,
         // so look again now. The item table is still seconds away at this point,
         // which is what makes standing down here safe.
         Sleep(1500);
@@ -163,7 +163,7 @@ namespace psm::stacks
         if (OtherProviderLoaded())
         {
             g_reason = kOtherMod;
-            LOG_NOTE("[stacks] Master Stack loaded as well, so it sets the stack sizes and this mod leaves them alone");
+            LOG_NOTE("[stacks] Stack Master loaded as well, so it sets the stack sizes and this mod leaves them alone");
             return;
         }
         char why[128];

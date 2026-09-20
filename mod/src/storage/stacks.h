@@ -8,8 +8,8 @@
 // touched. Research is private\research\R9-stack-size.md.
 //
 // StackMultiplier=1 means the game's own limits, and then nothing here runs and
-// no hook is installed. Master Stack, the standalone mod built from this code,
-// takes precedence: when MasterStack.asi is loaded this stands down and says so,
+// no hook is installed. Stack Master, the standalone mod built from this code,
+// takes precedence: when StackMaster.asi is loaded this stands down and says so,
 // so the two can never multiply the same limit twice.
 namespace psm::stacks
 {
@@ -19,7 +19,7 @@ namespace psm::stacks
     {
         kApplying = 0,
         kOff = 1,          // StackMultiplier is 1
-        kOtherMod = 2,     // Master Stack is installed and does it instead
+        kOtherMod = 2,     // Stack Master is installed and does it instead
         kNoAnchor = 3,     // the item table reader was not found
         kHookFailed = 4,
         kTooLate = 5,      // the game read its item table before the hook went in

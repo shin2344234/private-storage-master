@@ -1,15 +1,15 @@
 /* Item stack sizes, the interface any mod that raises them exports.
  *
- * The same header ships with Private Storage Master and with Master Stack, and
+ * The same header ships with Private Storage Master and with Stack Master, and
  * both export exactly these names. A caller in the game process (Master
  * Looter's Stacks tab) finds a provider by looking for each module it knows
  * with GetModuleHandleW, then GetProcAddress on the functions below:
  *
- *     MasterStack.asi              the standalone mod
+ *     StackMaster.asi              the standalone mod
  *     PrivateStorageMaster.asi     the same feature inside the storage mod
  *
  * More than one may answer. Ask each for its status and edit the one whose
- * `applying` is 1: that is the mod actually changing the limits. Master Stack
+ * `applying` is 1: that is the mod actually changing the limits. Stack Master
  * takes precedence by design, so when it is installed Private Storage Master
  * reports applying 0 and leaves stacks alone. If nothing reports applying 1 the
  * feature is off everywhere, and StackApplyMultiplier on any provider that
@@ -47,8 +47,8 @@ extern "C" {
 typedef struct StackStatus
 {
     uint32_t size;               /* sizeof(StackStatus) */
-    char     provider[24];       /* "Master Stack", "Private Storage Master" */
-    char     providerModule[32]; /* "MasterStack.asi" */
+    char     provider[24];       /* "Stack Master", "Private Storage Master" */
+    char     providerModule[32]; /* "StackMaster.asi" */
     char     version[16];        /* the provider's own version */
     char     gameVersion[16];    /* game versions it was built for */
     int32_t  applying;           /* 1 = this mod is the one changing limits */
