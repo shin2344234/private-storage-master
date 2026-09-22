@@ -10,7 +10,8 @@ multiple of the game's own limit for that item, which is the Fat Stacks idea don
 without replacing any game data. It is 1, off, until you change it. The same
 feature ships as its own mod, [Stack Master](https://www.nexusmods.com/crimsondesert/mods/3548),
 for people who want bigger stacks and not the storage mod; with both installed
-Stack Master applies and this one stands down.
+Stack Master applies and this one stands down. Since 1.1.3, Replenishing
+Arrows, Bullets and Cannonballs keep the game's own stack size.
 
 New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/3402)
 1.6.28 or later installed too, what Master Looter picks up goes straight into
@@ -46,11 +47,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.2:
+SHA-256 for 1.1.3:
 
-    3b3c995fa88f5b52589078c3e8eb29a44ef88f6f0085468f948f0126b866fc36  PrivateStorageMaster-1.1.2-DMM.zip
-    030806d953c5a496720767fee673d4eefda0815ab1c32887917708445e573705  PrivateStorageMaster-1.1.2.zip
-    141dc7a3662dbfdf53897821add7747316584095298df83a65a9fe221257b598  PrivateStorageMaster.asi
+    5596a3a96e5945fa3b069616ae61bdcb49c2740ec05f3212253a6c0a81982652  PrivateStorageMaster-1.1.3-DMM.zip
+    fc39db1da0f2ea609b5393c04fc5a4a1bfa57baa1de48bd78973575ce199c01c  PrivateStorageMaster-1.1.3.zip
+    795522e066e870243b87f1fa2ee23c3433e42647f8d673b06325d12d8980692d  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
