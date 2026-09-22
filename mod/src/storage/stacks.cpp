@@ -25,6 +25,10 @@ namespace psm::stacks
         // known to cope with. A stock limit already at or past it is left alone:
         // money sits far above it and clamping would shrink it.
         constexpr int64_t kCeiling = 999999;
+        // Replenishing Arrows, Bullets and Cannonballs refill themselves. A player
+        // reported their Replenishing Arrows running out with the limit raised, and
+        // the refill most likely goes by that limit, so these keep the game's own.
+        constexpr uint32_t kKeepStock[] = {1002557, 1003753, 1003752};
         // The standalone mod. Seth's decision is that it wins when both are
         // installed, so this one stands down rather than stacking the multipliers.
         constexpr const wchar_t* kOtherProvider = L"StackMaster.asi";
@@ -78,6 +82,10 @@ namespace psm::stacks
             // those would let gear, quest items and mounts pile into one slot.
             if (stock <= 1) { ++g_unstackable; return; }
             if (stock >= kCeiling) { ++g_huge; return; }
+            uint32_t key = 0;
+            if (!mem::Read32(rec + kKey, &key)) return;
+            for (const uint32_t k : kKeepStock)
+                if (key == k) return;
             int64_t want = stock * g_multiplier.load();
             if (want > kCeiling) want = kCeiling;
             if (want <= stock) return;
@@ -108,8 +116,6 @@ namespace psm::stacks
             if (want > g_biggest.load()) g_biggest = want;
             if (Log::Debug() && g_logged.fetch_add(1) < 10)
             {
-                uint32_t key = 0;
-                mem::Read32(rec + kKey, &key);
                 LOG("[stacks] item %u stacks to %lld instead of %lld", key, static_cast<long long>(want), static_cast<long long>(stock));
             }
         }

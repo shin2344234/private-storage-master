@@ -303,6 +303,7 @@ namespace psm::Settings
                     "; stay. Items the game does not stack, like gear and quest items, never\n"
                     "; start stacking, and no stack is taken past 999999. An item the game\n"
                     "; already lets you hold more of than that, such as money, is left alone.\n"
+                    "; Replenishing Arrows, Bullets and Cannonballs keep the game's own size.\n"
                     "; No game file is edited. A change made here takes effect the next time the\n"
                     "; game starts, because this file is read once. Raising it from Master Looter's\n"
                     "; Stacks tab takes hold straight away, as long as you are in free play with no\n"

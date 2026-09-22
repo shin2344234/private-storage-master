@@ -116,7 +116,8 @@ break it.
 
 Items the game does not stack, such as gear and quest items, never start
 stacking. No stack goes past 999999, and an item the game already lets you hold
-more of than that, like money, is left as it is.
+more of than that, like money, is left as it is. Replenishing Arrows, Bullets
+and Cannonballs keep the game's own stack size.
 
 Turning it back down does not shrink stacks you already built. A slot holding
 more than the game allows keeps what is in it until you take some out, so empty
