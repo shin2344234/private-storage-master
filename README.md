@@ -3,7 +3,8 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-Crimson Desert 2.02.00 and 2.03.00.
+Crimson Desert 2.02.00 and 2.03.00. Version 1.1.3 runs unchanged on the 2.03.01
+and 2.03.02 hotfixes and was tested in game on 2.03.02.
 
 New in 1.1.2: `StackMultiplier` raises how much of an item one slot holds, as a
 multiple of the game's own limit for that item, which is the Fat Stacks idea done
