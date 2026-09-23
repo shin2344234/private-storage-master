@@ -12,7 +12,15 @@
         3. POST /uploads/{id}/finalise    -> close the upload session
         4. GET  /uploads/{id}             -> poll until state == "available"
         5. POST /mod-files/{id}/versions  -> attach it as a new version of a file
+           or, with -NewFile,
+           POST /mod-files                -> create a new file entry from it
         6. POST /mods/{id}/changelogs     -> append changelog text (optional)
+
+    With -NewFile the result is written to the output stream as an object with
+    FileId and GameScopedId, so a caller can record the new entry's id.
+    POST /mod-files is marked Experimental in the spec; it was found there on
+    23 September 2026, after notes in several mods had said no such endpoint
+    existed.
 
     WHAT THIS SCRIPT CANNOT DO, because the v3 API has no endpoint for it as of
     2026-09-08 (verified against the OpenAPI spec and a v2 GraphQL introspection):
@@ -55,9 +63,12 @@ param(
 
     # The mod FILE id (not the mod id, and not the number in your mod's URL).
     # Find it via "API Info" on the Files tab of your public mod page, or in the
-    # edit menu on Manage Files.
-    [Parameter(Mandatory = $true)]
+    # edit menu on Manage Files. Required unless -NewFile.
     [string] $FileId,
+
+    # Create a new file entry from the upload instead of adding a version to
+    # -FileId. Needs -ModId, the v3 mod id.
+    [switch] $NewFile,
 
     # Version string for this new file version. Nexus enforces ^[a-zA-Z0-9.-]+$
     # so "1.4.2" and "1.4.2-beta" pass, but "1.4.2 (hotfix)" does not.
@@ -218,6 +229,13 @@ if ([string]::IsNullOrWhiteSpace($ApiKey)) {
     throw "No API key. Get one at https://www.nexusmods.com/settings/api-keys, then pass -ApiKey, set NEXUS_API_KEY, or put NEXUS_API_KEY=<key> in keys.local.env beside this script."
 }
 
+if ($NewFile) {
+    if ([string]::IsNullOrWhiteSpace($ModId)) { throw "-NewFile needs -ModId, the v3 mod id the new file entry belongs to." }
+    if (-not [string]::IsNullOrWhiteSpace($FileId)) { throw "-NewFile creates a file entry; do not pass -FileId with it." }
+} elseif ([string]::IsNullOrWhiteSpace($FileId)) {
+    throw "Pass -FileId for a new version of an existing file entry, or -NewFile to create an entry."
+}
+
 $file = Get-Item -LiteralPath $FilePath
 if ($file.PSIsContainer) { throw "FilePath must be a file, not a directory: $FilePath" }
 
@@ -279,7 +297,11 @@ Write-Host ""
 Write-Host "=== PLAN ===" -ForegroundColor Yellow
 Write-Host ("  Archive          : {0} ({1:N2} MiB)" -f $file.Name, ($file.Length / 1MB))
 Write-Host ("  MD5              : {0}" -f $md5Hex)
-Write-Host ("  Target file id   : {0}" -f $FileId)
+if ($NewFile) {
+    Write-Host ("  Target file id   : NEW file entry on mod {0}" -f $ModId)
+} else {
+    Write-Host ("  Target file id   : {0}" -f $FileId)
+}
 Write-Host ("  Version          : {0}" -f $Version)
 Write-Host ("  Display name     : {0}" -f $DisplayName)
 Write-Host ("  Category         : {0}" -f $Category)
@@ -389,8 +411,19 @@ if (-not [string]::IsNullOrWhiteSpace($FileDescription)) {
     $versionBody['description'] = $FileDescription
 }
 
-$result = Invoke-NexusApi -Method 'POST' -Path "/mod-files/$FileId/versions" -Body $versionBody
-Write-Host ("      created version id: {0}" -f $result.data.version.id) -ForegroundColor Green
+if ($NewFile) {
+    # POST /mod-files takes the mod id and the flags of a first version, and
+    # has no archive_existing_file since there is nothing to archive yet.
+    $versionBody.Remove('archive_existing_file')
+    $versionBody['mod_id'] = $ModId
+    $result = Invoke-NexusApi -Method 'POST' -Path '/mod-files' -Body $versionBody
+    $entry = $result.data
+    Write-Host ("      created file entry: {0} (game scoped {1})" -f $entry.id, $entry.game_scoped_id) -ForegroundColor Green
+    Write-Output ([pscustomobject] @{ FileId = [string] $entry.id; GameScopedId = [string] $entry.game_scoped_id })
+} else {
+    $result = Invoke-NexusApi -Method 'POST' -Path "/mod-files/$FileId/versions" -Body $versionBody
+    Write-Host ("      created version id: {0}" -f $result.data.version.id) -ForegroundColor Green
+}
 
 # --------------------------------------------------------------------------
 # Optional: append the changelog entry

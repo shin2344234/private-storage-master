@@ -17,15 +17,25 @@
       2. the manual entry (manualFileId) with <fileBase>-<version>.zip, with no
          changelog, since the first upload already posted it
 
+    A page with no manual entry yet (manualFileId empty) gets one: the manual
+    archive goes up as a new file entry through POST /mod-files, and the new id
+    is written into release.json. Commit that change with the release's
+    antivirus commit.
+
     The changelog endpoint appends rather than replaces, so publishing one
     version twice posts the text twice. Before sending, this asks the API what
-    each entry already lists and skips an entry that already has the version.
-    That also makes a second run safe after the first one failed half way.
+    each entry already lists. A version counts as already there only when it is
+    not archived or removed, and when its archive is the same size as the local
+    one, read from the v1 files list, because the v3 versions list does not say
+    which archive a version holds. A match is skipped, which makes a second run
+    safe after the first failed half way. A version that is there with a
+    different archive stops the run, since that is a wrong upload to repair,
+    and the repair command is printed.
 
     The previous version is left listed, never archived. Nexus demotes it to
     old_version on its own once the new one goes up, and an old_version file
-    keeps its download button. Nothing needs moving by hand. -ArchivePrevious
-    pulls a build outright, which is the thing Seth does not want.
+    keeps its download button. -ArchivePrevious pulls a build outright, which
+    is the thing Seth does not want.
 
     Report only unless you pass -Apply.
 
@@ -50,26 +60,12 @@ $ErrorActionPreference = 'Stop'
 $cfg = Get-ReleaseConfig -Version $Version
 $Version = $cfg.Version
 $nx = $cfg.Data.nexus
+$game = if ($nx.game) { $nx.game } else { 'crimsondesert' }
 
-foreach ($k in @('modId', 'dmmFileId')) {
+foreach ($k in @('modId', 'dmmFileId', 'page')) {
     if (-not $nx -or [string]::IsNullOrWhiteSpace([string] $nx.$k)) {
         throw ("nexus.{0} is not set in release.json. Run nexus-ids.py and copy it in." -f $k)
     }
-}
-
-# A mod that has never had a manual entry gets one by hand, because the v3 API
-# cannot create a file entry. That is done during a release, after GitHub and
-# before this runs with -Apply. The manual entry never carries the changelog,
-# so the hand upload loses nothing.
-$handStep = [string]::IsNullOrWhiteSpace([string] $nx.manualFileId)
-if ($handStep) {
-    $how = ("nexus.manualFileId is empty: the page has no manual file entry yet. On the page's Files tab, " +
-            "add a file in the Main files category, upload {0}, and type the version as {1} exactly, since " +
-            "that string is what marks it as already listed and cannot be corrected by API. Leave the " +
-            "mod-manager download option off. Then run nexus-ids.py, put the new id in release.json as " +
-            "nexus.manualFileId, and run this with -Apply. It skips that entry and publishes the DMM one.") -f
-           (Split-Path $cfg.ZipManual -Leaf), $cfg.Version
-    if ($Apply) { throw $how }
 }
 foreach ($f in @($cfg.ZipDmm, $cfg.ZipManual)) {
     if (-not (Test-Path -LiteralPath $f)) { throw "No archive at $f. Run package.ps1 first." }
@@ -85,73 +81,126 @@ $entries = @(
     [pscustomobject] @{
         Label = 'DMM'; FileId = [string] $nx.dmmFileId; Archive = $cfg.ZipDmm
         DisplayName = ('{0} {1} DMM' -f $cfg.FileBase, $Version); Changelog = $true
+        State = 'send'; Note = ''
     },
     [pscustomobject] @{
         Label = 'manual'; FileId = [string] $nx.manualFileId; Archive = $cfg.ZipManual
         DisplayName = ('{0} {1} manual' -f $cfg.FileBase, $Version); Changelog = $false
+        State = 'send'; Note = ''
     }
 )
-if ($handStep) { $entries = @($entries[0]) }
+foreach ($e in $entries) { if ([string]::IsNullOrWhiteSpace($e.FileId)) { $e.State = 'create' } }
 
-# What is already up there, per entry.
+# What is already up there, per entry. Sizes come from the v1 files list,
+# keyed by the version's game_scoped_id.
 $key = Read-ReleaseKey -Name 'NEXUS_API_KEY'
-foreach ($e in $entries) {
-    $e | Add-Member -NotePropertyName Already -NotePropertyValue $null
-    if ([string]::IsNullOrWhiteSpace($key)) { continue }
-    try {
-        $existing = Invoke-RestMethod -Uri "https://api.nexusmods.com/v3/mod-files/$($e.FileId)/versions" `
-                                      -Headers @{ 'apikey' = $key } -Method Get
-        $hit = $existing.data.versions | Where-Object { $_.version -eq $Version } | Select-Object -First 1
-        if ($hit) { $e.Already = $hit.uploaded_at }
-    } catch {
-        if ($Apply) {
-            throw (("Could not read what file {0} already lists ({1}). Nothing was sent, because " +
-                    "sending blind can post the changelog twice.") -f $e.FileId, $_.Exception.Message)
-        }
-        Write-Warning ("Could not read what file {0} already lists: {1}" -f $e.FileId, $_.Exception.Message)
-    }
-}
 if ($Apply -and [string]::IsNullOrWhiteSpace($key)) {
     throw "No NEXUS_API_KEY in the environment or keys.local.env beside this script."
+}
+$sizes = $null
+$problems = @()
+if (-not [string]::IsNullOrWhiteSpace($key)) {
+    try {
+        $v1 = Invoke-RestMethod -Uri ("https://api.nexusmods.com/v1/games/{0}/mods/{1}/files.json" -f $game, $nx.page) `
+                                -Headers @{ 'apikey' = $key; 'accept' = 'application/json' } -Method Get
+        $sizes = @{}
+        foreach ($f in $v1.files) { $sizes[[string] $f.file_id] = [long] $f.size_in_bytes }
+    } catch {
+        $problems += ("could not read the page's file sizes from the v1 API ({0})" -f $_.Exception.Message)
+    }
+    foreach ($e in $entries) {
+        if ($e.State -eq 'create') { continue }
+        try {
+            $existing = Invoke-RestMethod -Uri "https://api.nexusmods.com/v3/mod-files/$($e.FileId)/versions" `
+                                          -Headers @{ 'apikey' = $key } -Method Get
+        } catch {
+            $problems += ("could not read what file {0} already lists ({1})" -f $e.FileId, $_.Exception.Message)
+            continue
+        }
+        $hits = @($existing.data.versions | Where-Object {
+            $_.version -eq $Version -and @('archived', 'removed') -notcontains $_.category })
+        if (-not $hits) { continue }
+        $local = (Get-Item -LiteralPath $e.Archive).Length
+        $same = @($hits | Where-Object { $sizes -and $sizes[[string] $_.game_scoped_id] -eq $local })
+        if ($same) {
+            $e.State = 'done'
+            $e.Note = 'uploaded {0}, {1:N0} bytes, same as the local archive' -f $same[0].uploaded_at, $local
+        } elseif ($null -eq $sizes) {
+            $problems += ("{0} entry {1} lists {2}, and its archive could not be checked against the local one" -f $e.Label, $e.FileId, $Version)
+        } else {
+            $theirs = ($hits | ForEach-Object { '{0:N0}' -f $sizes[[string] $_.game_scoped_id] }) -join ', '
+            $e.State = 'wrong'
+            $problems += (("{0} entry {1} lists {2} with an archive of {3} bytes, but {4} is {5:N0} bytes. " +
+                           "It holds a different archive. Repair it with a new version that archives the wrong one:`n" +
+                           "    Publish-NexusModUpdate.ps1 -FilePath `"{6}`" -FileId {1} -Version {2} " +
+                           "-DisplayName `"{7}`" -ArchiveExistingFile -Apply`n" +
+                           "then run this again.") -f $e.Label, $e.FileId, $Version, $theirs,
+                          (Split-Path $e.Archive -Leaf), $local, $e.Archive, $e.DisplayName)
+        }
+    }
 }
 
 # The changelog rides on the DMM upload. If the DMM entry already has this
 # version, its changelog is already posted, so the manual one must not post it.
 foreach ($e in $entries) {
     Write-Host ""
-    if ($e.Already) {
-        Write-Host ("{0} entry {1} already lists {2} (uploaded {3}). Skipped." -f $e.Label, $e.FileId, $Version, $e.Already) -ForegroundColor Yellow
-        continue
+    switch ($e.State) {
+        'done'   { Write-Host ("{0} entry {1} already has {2} ({3}). Skipped." -f $e.Label, $e.FileId, $Version, $e.Note) -ForegroundColor Yellow }
+        'wrong'  { Write-Host ("{0} entry {1} holds the wrong archive for {2}. See below." -f $e.Label, $e.FileId, $Version) -ForegroundColor Red }
+        'create' { Write-Host ("{0} entry: none yet. {1} goes up as a new file entry." -f $e.Label, (Split-Path $e.Archive -Leaf)) -ForegroundColor Cyan }
+        default  { Write-Host ("{0} entry {1}: {2}" -f $e.Label, $e.FileId, (Split-Path $e.Archive -Leaf)) -ForegroundColor Cyan }
     }
-    Write-Host ("{0} entry {1}: {2}" -f $e.Label, $e.FileId, (Split-Path $e.Archive -Leaf)) -ForegroundColor Cyan
+}
+if ($problems) {
+    Write-Host ""
+    foreach ($p in $problems) { Write-Host "REFUSED  $p" -ForegroundColor Red }
+    if ($Apply) { Write-Host "Nothing was sent." -ForegroundColor Red; exit 1 }
+}
+if (($entries | Where-Object { $_.Label -eq 'DMM' }).State -eq 'create') {
+    throw "The DMM entry has to exist already; it is the page's primary download. Set nexus.dmmFileId."
+}
+
+foreach ($e in $entries) {
+    if (@('done', 'wrong') -contains $e.State) { continue }
+    Write-Host ""
     $call = @{
         FilePath    = $e.Archive
-        FileId      = $e.FileId
         ModId       = [string] $nx.modId
         Version     = $Version
         DisplayName = $e.DisplayName
         Category    = 'main'
     }
+    if ($e.State -eq 'create') { $call['NewFile'] = $true } else { $call['FileId'] = $e.FileId }
     if ($e.Changelog) {
         $call['ChangelogPath']             = $cfg.Changelog
         $call['UpdateModVersion']          = $true
         $call['PrimaryModManagerDownload'] = $true
     }
-    if ($ArchivePrevious) { $call['ArchiveExistingFile'] = $true }
-    if ($Apply)           { $call['Apply']               = $true }
-    & (Join-Path $PSScriptRoot 'Publish-NexusModUpdate.ps1') @call
+    if ($ArchivePrevious -and $e.State -ne 'create') { $call['ArchiveExistingFile'] = $true }
+    if ($Apply) { $call['Apply'] = $true }
+    $out = & (Join-Path $PSScriptRoot 'Publish-NexusModUpdate.ps1') @call
+    $made = @($out | Where-Object { $_ -and $_.PSObject.Properties['FileId'] }) | Select-Object -First 1
+    if ($e.State -eq 'create' -and $made) {
+        # Record the new entry in release.json by editing the one value, so the
+        # file keeps its layout.
+        $json = Join-Path $cfg.Root 'release.json'
+        $text = [System.IO.File]::ReadAllText($json)
+        $new = [regex]::Replace($text, '("manualFileId"\s*:\s*)""', ('${1}"' + $made.FileId + '"'), 1)
+        if ($new -eq $text) {
+            Write-Host ("Created manual entry {0}, but release.json did not have an empty manualFileId to fill. Set it by hand." -f $made.FileId) -ForegroundColor Red
+        } else {
+            [System.IO.File]::WriteAllText($json, $new, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host ("Created manual entry {0} and wrote it into release.json as nexus.manualFileId. Commit it with the antivirus commit." -f $made.FileId) -ForegroundColor Green
+        }
+    }
 }
 
 Write-Host ""
 if ($Apply) {
     Write-Host "Still by hand, because the v3 API has no endpoint for either:" -ForegroundColor Yellow
 } else {
-    if ($handStep) {
-        Write-Host "HAND STEP before -Apply:" -ForegroundColor Yellow
-        Write-Host "  $how"
-        Write-Host ""
-    }
     Write-Host "REPORT ONLY. Nothing was sent. After -Apply, these stay by hand:" -ForegroundColor Yellow
 }
 Write-Host ("  paste the page description   private\nexus\nexus-description.bbcode")
 Write-Host ("  post the update              private\nexus\nexus-post-{0}.bbcode" -f $Version)
+if ($problems) { exit 1 }

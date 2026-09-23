@@ -261,9 +261,17 @@ def cmd_check():
                 for r in ("dmm", "manual", "plugin"):
                     if files[r]["sha256"] not in text:
                         problems.append("%s lacks the %s checksum" % (rel(path), r))
+        # stamp only rewrites checksum lines that are already there, so a
+        # description that never had a line for one of the files stays without
+        # it. The first release with two archives hit that.
         desc = CFG.path("private", "nexus", "nexus-description.bbcode")
-        if os.path.exists(desc) and files["plugin"]["sha256"] not in read(desc):
-            problems.append("%s lacks this release's checksums (release-docs.py stamp)" % rel(desc))
+        if os.path.exists(desc):
+            text = read(desc)
+            for r in ("dmm", "manual", "plugin"):
+                if files[r]["sha256"] not in text:
+                    problems.append("%s lacks the %s checksum. If it has no line for %s at all, add "
+                                    "'<sha256>  %s' to its checksum block, then run release-docs.py stamp"
+                                    % (rel(desc), r, files[r]["name"], files[r]["name"]))
 
     discord = dict(docs)["discord"]
     if os.path.exists(discord):
