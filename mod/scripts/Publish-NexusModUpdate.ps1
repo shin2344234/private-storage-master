@@ -418,8 +418,29 @@ if ($NewFile) {
     $versionBody['mod_id'] = $ModId
     $result = Invoke-NexusApi -Method 'POST' -Path '/mod-files' -Body $versionBody
     $entry = $result.data
-    Write-Host ("      created file entry: {0} (game scoped {1})" -f $entry.id, $entry.game_scoped_id) -ForegroundColor Green
-    Write-Output ([pscustomobject] @{ FileId = [string] $entry.id; GameScopedId = [string] $entry.game_scoped_id })
+    # The spec says this returns the new mod file, but the id that comes back
+    # is its first version's. Master Looter's manual entry on 23 September 2026
+    # came back as 38521561694027, game scoped 16203, and GET /mod-files on that
+    # id is a 404. The file's own id, 8015505, is only on the version, as
+    # file.id, so look the version up among the mod's files.
+    $versionId = [string] $entry.id
+    $fileId = if ($entry.PSObject.Properties['file'] -and $entry.file.id) { [string] $entry.file.id } else { '' }
+    for ($try = 1; -not $fileId -and $try -le 3; $try++) {
+        if ($try -gt 1) { Start-Sleep -Seconds 3 }
+        $files = @((Invoke-NexusApi -Method 'GET' -Path "/mods/$ModId/files").data.mod_files)
+        # The new entry carries the name just given it, so ask it first.
+        $files = @($files | Where-Object { $_.name -eq $DisplayName }) + @($files | Where-Object { $_.name -ne $DisplayName })
+        foreach ($f in $files) {
+            $vs = @((Invoke-NexusApi -Method 'GET' -Path "/mod-files/$($f.id)/versions").data.versions)
+            if ($vs | Where-Object { [string] $_.id -eq $versionId }) { $fileId = [string] $f.id; break }
+        }
+    }
+    if (-not $fileId) {
+        throw (("Created a file entry whose first version is {0}, but no file on mod {1} lists that version. " +
+                "Find the new entry's file id with nexus-ids.py and set nexus.manualFileId by hand.") -f $versionId, $ModId)
+    }
+    Write-Host ("      created file entry: {0} (first version {1}, game scoped {2})" -f $fileId, $versionId, $entry.game_scoped_id) -ForegroundColor Green
+    Write-Output ([pscustomobject] @{ FileId = $fileId; VersionId = $versionId; GameScopedId = [string] $entry.game_scoped_id })
 } else {
     $result = Invoke-NexusApi -Method 'POST' -Path "/mod-files/$FileId/versions" -Body $versionBody
     Write-Host ("      created version id: {0}" -f $result.data.version.id) -ForegroundColor Green
