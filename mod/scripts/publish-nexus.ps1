@@ -51,14 +51,25 @@ $cfg = Get-ReleaseConfig -Version $Version
 $Version = $cfg.Version
 $nx = $cfg.Data.nexus
 
-foreach ($k in @('modId', 'dmmFileId', 'manualFileId')) {
+foreach ($k in @('modId', 'dmmFileId')) {
     if (-not $nx -or [string]::IsNullOrWhiteSpace([string] $nx.$k)) {
-        throw (("nexus.{0} is not set in release.json. The v3 API cannot create a file entry, so it " +
-                "has to exist first: on the page's Files tab, add a new file and upload this release's " +
-                "{1} archive by hand. Then run nexus-ids.py, copy the new id into release.json, and run " +
-                "this again. It will skip that entry as already listed and publish the other.") -f $k,
-               $(if ($k -eq 'manualFileId') { 'manual' } else { 'DMM' }))
+        throw ("nexus.{0} is not set in release.json. Run nexus-ids.py and copy it in." -f $k)
     }
+}
+
+# A mod that has never had a manual entry gets one by hand, because the v3 API
+# cannot create a file entry. That is done during a release, after GitHub and
+# before this runs with -Apply. The manual entry never carries the changelog,
+# so the hand upload loses nothing.
+$handStep = [string]::IsNullOrWhiteSpace([string] $nx.manualFileId)
+if ($handStep) {
+    $how = ("nexus.manualFileId is empty: the page has no manual file entry yet. On the page's Files tab, " +
+            "add a file in the Main files category, upload {0}, and type the version as {1} exactly, since " +
+            "that string is what marks it as already listed and cannot be corrected by API. Leave the " +
+            "mod-manager download option off. Then run nexus-ids.py, put the new id in release.json as " +
+            "nexus.manualFileId, and run this with -Apply. It skips that entry and publishes the DMM one.") -f
+           (Split-Path $cfg.ZipManual -Leaf), $cfg.Version
+    if ($Apply) { throw $how }
 }
 foreach ($f in @($cfg.ZipDmm, $cfg.ZipManual)) {
     if (-not (Test-Path -LiteralPath $f)) { throw "No archive at $f. Run package.ps1 first." }
@@ -80,6 +91,7 @@ $entries = @(
         DisplayName = ('{0} {1} manual' -f $cfg.FileBase, $Version); Changelog = $false
     }
 )
+if ($handStep) { $entries = @($entries[0]) }
 
 # What is already up there, per entry.
 $key = Read-ReleaseKey -Name 'NEXUS_API_KEY'
@@ -134,6 +146,11 @@ Write-Host ""
 if ($Apply) {
     Write-Host "Still by hand, because the v3 API has no endpoint for either:" -ForegroundColor Yellow
 } else {
+    if ($handStep) {
+        Write-Host "HAND STEP before -Apply:" -ForegroundColor Yellow
+        Write-Host "  $how"
+        Write-Host ""
+    }
     Write-Host "REPORT ONLY. Nothing was sent. After -Apply, these stay by hand:" -ForegroundColor Yellow
 }
 Write-Host ("  paste the page description   private\nexus\nexus-description.bbcode")
