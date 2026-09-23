@@ -1,27 +1,27 @@
 <#
 .SYNOPSIS
-    Sign PrivateStorageMaster.asi with Azure Trusted Signing, then verify it.
+    Sign the plugin with Azure Trusted Signing, then verify it.
 
 .DESCRIPTION
+    Synced from release-kit. Do not edit it here; the next sync overwrites it.
+
     Runs signtool with the Azure Trusted Signing dlib against the account in
     private\signing.json (endpoint, account name, certificate profile; no
     secrets). The credential is the Azure CLI login, so `az login` once on
     this machine is the whole setup. The certificate is issued to Seth Walker
-    under Microsoft's identity-verified chain, the same one Master Looter and Flight Freedom
-    ships with.
+    under Microsoft's identity-verified chain, and every mod signs with it.
 
     The signtool that works is the one beside the dlib in private\tools, the
     copy vpk ships. The Windows SDK's own signtool ignores the dlib and fails
     with "No certificates were found that met all the given criteria".
 
     Sign before package.ps1, never after: the archives carry the plugin and
-    the checksums on the Nexus page are of the signed file. The point is the
-    antivirus trend. An unsigned binary with no history is what the models
-    react to, and a Microsoft-issued signature carries reputation from one
-    release to the next where a false-positive report clears one hash only.
+    the checksums on the Nexus page are of the signed file. An unsigned binary
+    with no history is what the antivirus models react to, and a
+    Microsoft-issued signature carries reputation from one release to the next.
 
 .EXAMPLE
-    .\sign.ps1                       signs mod\dist\PrivateStorageMaster.asi
+    .\sign.ps1                       signs <dist>\<fileBase>.asi from release.json
     .\sign.ps1 -Path some\other.dll  signs that file instead
     .\sign.ps1 -VerifyOnly           reports the signature already on the file
 #>
@@ -32,17 +32,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-if (-not $Path) { $Path = Join-Path $repo 'mod\dist\PrivateStorageMaster.asi' }
+. (Join-Path $PSScriptRoot 'ReleaseConfig.ps1')
+$cfg = Get-ReleaseConfig
+if (-not $Path) { $Path = $cfg.Asi }
 $Path = (Resolve-Path $Path).Path
 
-$tools    = Join-Path $repo 'private\tools'
-$metadata = Join-Path $repo 'private\signing.json'
+$tools    = Join-Path $cfg.Root 'private\tools'
+$metadata = Join-Path $cfg.Root 'private\signing.json'
 $dlib     = Join-Path $tools 'Azure.CodeSigning.Dlib.dll'
 $signtool = Join-Path $tools 'signtool.exe'
 foreach ($f in @($metadata, $dlib, $signtool)) {
     if (-not (Test-Path -LiteralPath $f)) {
-        throw "Missing $f. private\tools is a copy of vpk's vendor\signing folder, as used by Master Looter."
+        throw "Missing $f. private\tools is a copy of vpk's vendor\signing folder; copy it and private\signing.json from any other mod."
     }
 }
 $bom = [System.IO.File]::ReadAllBytes($metadata) | Select-Object -First 3

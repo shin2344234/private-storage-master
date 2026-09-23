@@ -1,0 +1,41 @@
+{
+  "name": "Private Storage Master",
+  "fileBase": "PrivateStorageMaster",
+  "version": {
+    "header": "mod/src/version.h",
+    "macro": "PSM_VERSION"
+  },
+  "scriptsDir": "mod/scripts",
+  "dist": "mod/dist",
+  "sources": [
+    "mod/src",
+    "mod/CMakeLists.txt"
+  ],
+  "manualZip": [
+    "mod/README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "gates": [
+    {
+      "name": "the Ctrl+F11 deposit test key is compiled out",
+      "run": "findstr /C:\"PSM_DEPOSIT_TEST_KEY:BOOL=OFF\" mod\\build\\CMakeCache.txt"
+    }
+  ],
+  "evergreen": [
+    "private/nexus/nexus-description.bbcode",
+    "README.md"
+  ],
+  "github": "shin2344234/private-storage-master",
+  "nexus": {
+    "game": "crimsondesert",
+    "page": "3521",
+    "modId": "38521561681345",
+    "dmmFileId": "7981470",
+    "manualFileId": "7981473"
+  },
+  "discord": {
+    "channel": "1547305058922668072"
+  },
+  "requires": []
+}

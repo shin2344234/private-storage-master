@@ -5,9 +5,11 @@
     py -3 vtscan.py --prose     also print the paragraphs the README and the
                                 Nexus description want, with the numbers filled in
 
-Run package.py first: this reads the two archives and the plugin out of dist
-and takes the version from version.h, so the three files it reports are the
-three the release actually ships.
+Synced from release-kit. Do not edit it here; the next sync overwrites it.
+
+Run package.ps1 first: this reads the two archives and the plugin out of dist
+and takes the version from the header named in release.json, so the three
+files it reports are the three the release actually ships.
 
 Needs a key in VT_API_KEY. Get one by signing in at virustotal.com and opening
 the API key page from the account menu. The free key is enough: the limits are
@@ -30,50 +32,24 @@ import time
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import release_config as rc
+
 API = "https://www.virustotal.com/api/v3"
 GUI = "https://www.virustotal.com/gui/file/"
-HERE = os.path.dirname(os.path.abspath(__file__))
-MOD = os.path.dirname(HERE)
-DIST = os.path.join(MOD, "dist")
+CFG = rc.load()
+DIST = CFG.dist
+KEYFILE = rc.KEYFILE
+read_key = rc.read_key
+
 
 # The order the README and the description list them.
 def release_files(version):
     return [
-        ("PrivateStorageMaster-%s-DMM.zip" % version, "the DMM archive"),
-        ("PrivateStorageMaster-%s.zip" % version, "the full archive"),
-        ("PrivateStorageMaster.asi", "the plugin"),
+        ("%s-%s-DMM.zip" % (CFG.file_base, version), "the DMM archive"),
+        ("%s-%s.zip" % (CFG.file_base, version), "the full archive"),
+        ("%s.asi" % CFG.file_base, "the plugin"),
     ]
-
-
-def version_from_header():
-    h = os.path.join(MOD, "src", "version.h")
-    text = io.open(h, encoding="utf-8").read()
-    m = re.search(r'#define\s+PSM_VERSION\s+"([^"]+)"', text)
-    if not m:
-        raise SystemExit("no PSM_VERSION in %s" % h)
-    return m.group(1)
-
-
-# Keys come from the environment first. keys.local.env beside this script is
-# the fallback, so both keys can live in one gitignored file instead of two
-# environment variables. Nothing here ever prints a key.
-KEYFILE = os.path.join(HERE, "keys.local.env")
-
-
-def read_key(name):
-    got = os.environ.get(name)
-    if got:
-        return got.strip()
-    if not os.path.exists(KEYFILE):
-        return None
-    for line in io.open(KEYFILE, encoding="utf-8"):
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        if k.strip() == name:
-            return v.strip().strip('"').strip("'")
-    return None
 
 
 def sha256(path):
@@ -186,7 +162,7 @@ def main():
             "  put VT_API_KEY=<key> in %s\n"
             "which is gitignored." % KEYFILE)
 
-    version = args.version or version_from_header()
+    version = args.version or CFG.version
     rows = []
     for name, label in release_files(version):
         path = os.path.join(DIST, name)
@@ -200,6 +176,13 @@ def main():
             continue
         hits, total = score(attrs)
         names = flagged(attrs)
+        if total == 0:
+            # A fresh upload reads 0/0 until the engines report, which took
+            # eight minutes on PSM 1.1.3. That is no result, not a clean one.
+            print("%-34s 0/0  no engine has reported yet; run again in a few minutes" % name)
+            print("%-34s %s%s" % ("", GUI, digest))
+            rows.append((name, label, digest, None, None))
+            continue
         print("%-34s %d/%d  %s" % (name, hits, total,
                                    ", ".join("%s %s" % kv for kv in sorted(names.items())) or "clean"))
         print("%-34s %s%s" % ("", GUI, digest))
@@ -208,7 +191,7 @@ def main():
     if not args.prose:
         return
 
-    plugin = next((r for r in rows if r[0] == "PrivateStorageMaster.asi" and r[3]), None)
+    plugin = next((r for r in rows if r[0] == "%s.asi" % CFG.file_base and r[3]), None)
     dmm = next((r for r in rows if r[0].endswith("-DMM.zip") and r[3]), None)
     if not plugin:
         print("\nNo plugin report yet, so no prose.")
