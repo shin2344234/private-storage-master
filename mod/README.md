@@ -1,5 +1,5 @@
-Private Storage Master 1.1.3 for Crimson Desert 2.02.00 and 2.03.00
-===================================================================
+Private Storage Master 1.1.4 for Crimson Desert 2.02.00 to 2.03.02
+==================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
 storage's size, raises how much one slot holds of an item, and with Master

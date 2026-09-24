@@ -3,8 +3,7 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-Crimson Desert 2.02.00 and 2.03.00. Version 1.1.3 runs unchanged on the 2.03.01
-and 2.03.02 hotfixes and was tested in game on 2.03.02.
+Crimson Desert 2.02.00 to 2.03.02.
 
 New in 1.1.2: `StackMultiplier` raises how much of an item one slot holds, as a
 multiple of the game's own limit for that item, which is the Fat Stacks idea done
@@ -19,7 +18,7 @@ New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/
 your storage. Ore and plants go to the Gatherables Chest, food to the Kuku
 Cooler, collectibles to the Collectibles Chest. Since 1.1.1, with Master Looter
 1.6.29, it works as Damiane and Oongka too. Only what was just picked up
-moves and money stays with you. It is off until you tick "Put what Master
+moves and money stays with you. Since 1.1.4, so do arrows you pick back up. It is off until you tick "Put what Master
 Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
 needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
 
@@ -48,11 +47,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.3:
+SHA-256 for 1.1.4:
 
-    5596a3a96e5945fa3b069616ae61bdcb49c2740ec05f3212253a6c0a81982652  PrivateStorageMaster-1.1.3-DMM.zip
-    fc39db1da0f2ea609b5393c04fc5a4a1bfa57baa1de48bd78973575ce199c01c  PrivateStorageMaster-1.1.3.zip
-    795522e066e870243b87f1fa2ee23c3433e42647f8d673b06325d12d8980692d  PrivateStorageMaster.asi
+    ed2e01e64b9c35479511bd1b302db6486e4d124bf6f5e44a150ac2a7f1e34dc5  PrivateStorageMaster-1.1.4-DMM.zip
+    13ecda2f146bca8b21341203452b74e5457508e561172e557e62610d0f4164e6  PrivateStorageMaster-1.1.4.zip
+    3db8f96c684cef002379ae699975c7f20040b216bfbcfa7df7432f43d03c431a  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
