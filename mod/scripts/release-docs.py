@@ -21,11 +21,17 @@ rewrites any line that pairs a checksum with one of this mod's release file
 names, in the four documents and in the files listed under evergreen in
 release.json (the Nexus description and the root README by default). A file
 that ships inside the manual archive is never stamped: its checksum is part of
-the archive it would describe. VirusTotal links are left alone; they change in
-the antivirus step, once the scores are in.
+the archive it would describe.
+
+A VirusTotal link keeps pointing at the file it named. stamp looks its hash up
+in the previous version's private/checksums record: the previous plugin's hash
+becomes this plugin's, the previous DMM zip's becomes this DMM zip's, and the
+same for the manual zip. A link to a hash on neither record is left alone and
+listed. The antivirus step still rewrites the scores once they are in.
 
 check refuses when a document is missing, a placeholder or TODO is left, the
-checksums on record no longer match dist, the Discord text lacks a link, the
+checksums on record no longer match dist, two VirusTotal links with different
+labels in one file carry the same hash, the Discord text lacks a link, the
 in-game verification record is missing, or prose_check.py fails.
 
 The verification record is private/verified/<version>.txt. Its first line is
@@ -54,6 +60,13 @@ TEMPLATES = {
 UNTESTED = "not tested in play"
 HEX = re.compile(r"\b[0-9a-f]{64}\b")
 SHA_HEADING = re.compile(r"(SHA-256 for )\d+\.\d+\.\d+")
+VT = r"https?://(?:www\.)?virustotal\.com/(?:gui/)?file/"
+VT_HASH = re.compile(r"(%s)([0-9a-f]{64})\b" % VT)
+# A labelled link, BBCode or Markdown: the label and the hash.
+VT_LINKS = (
+    re.compile(r"\[url=%s(?P<hash>[0-9a-f]{64})[^\]]*\](?P<label>.*?)\[/url\]" % VT, re.I | re.S),
+    re.compile(r"\[(?P<label>[^\]]+)\]\(%s(?P<hash>[0-9a-f]{64})[^)]*\)" % VT, re.I),
+)
 
 
 def read(path):
@@ -99,6 +112,27 @@ def load_checksums():
     return data["files"]
 
 
+def previous_hashes():
+    """Each hash on the latest checksum record older than this version, mapped
+    to its file's role, and that record's version. ({}, None) without one."""
+    d = CFG.path("private", "checksums")
+    if not os.path.isdir(d):
+        return {}, None
+    now = version_tuple(CFG.version)
+    best = None
+    for name in os.listdir(d):
+        if not name.endswith(".json"):
+            continue
+        data = json.loads(read(os.path.join(d, name)))
+        v = data.get("version") or name[:-5]
+        if version_tuple(v) < now and (best is None or version_tuple(v) > version_tuple(best[0])):
+            best = (v, data)
+    if not best:
+        return {}, None
+    files = best[1].get("files", {})
+    return dict((files[r]["sha256"], r) for r in ("dmm", "manual", "plugin") if r in files), best[0]
+
+
 def sha_tokens(files):
     return {
         "SHA256_DMM": files["dmm"]["sha256"],
@@ -127,6 +161,11 @@ def cmd_new():
     return 0
 
 
+def evergreen():
+    """The documents outside this version's four that stamp keeps current."""
+    return [CFG.path(p) for p in CFG.data.get("evergreen", ["private/nexus/nexus-description.bbcode", "README.md"])]
+
+
 def role_patterns():
     b = re.escape(CFG.file_base)
     return {
@@ -149,27 +188,40 @@ def line_role(line, pats):
     return roles.pop() if len(roles) == 1 else None
 
 
-def stamp_text(text, files, pats):
+def stamp_text(text, files, pats, previous):
     text = fill(text, sha_tokens(files))
-    out, touched, leftover = [], 0, []
+    current = set(f["sha256"] for f in files.values())
+    out, touched, leftover, unknown = [], 0, [], []
+
+    # A VirusTotal link names its file by its label, not by anything stamp can
+    # read, so it follows its own hash from the previous record instead. The
+    # line around it can name the plugin and still hold a link to an archive.
+    def vt(m):
+        h = m.group(2)
+        if h in previous:
+            return m.group(1) + files[previous[h]]["sha256"]
+        if h not in current:
+            unknown.append(h)
+        return m.group(0)
+
     for line in text.splitlines(True):
-        role = line_role(line, pats) if HEX.search(line) else None
+        before = line
+        links = set(m.start(2) for m in VT_HASH.finditer(line))
+        plain = [m for m in HEX.finditer(line) if m.start() not in links]
+        role = line_role(line, pats) if plain else None
         if role:
-            new = HEX.sub(files[role]["sha256"], line)
+            line = HEX.sub(lambda m: m.group(0) if m.start() in links else files[role]["sha256"], line)
             if role in ("dmm", "manual"):
-                new = pats[role].sub(files[role]["name"], new)
-            if new != line:
-                touched += 1
-            line = new
-        elif HEX.search(line):
+                line = pats[role].sub(files[role]["name"], line)
+        elif plain:
             leftover.append(line.strip()[:110])
+        line = VT_HASH.sub(vt, line)
         # The heading over the checksum block names the version.
-        new = SHA_HEADING.sub(lambda m: m.group(1) + CFG.version, line)
-        if new != line:
+        line = SHA_HEADING.sub(lambda m: m.group(1) + CFG.version, line)
+        if line != before:
             touched += 1
-            line = new
         out.append(line)
-    return "".join(out), touched, leftover
+    return "".join(out), touched, leftover, unknown
 
 
 def cmd_stamp():
@@ -177,9 +229,13 @@ def cmd_stamp():
     if not files:
         raise SystemExit("No %s. Run package.ps1 first." % rel(CFG.checksums_path()))
     pats = role_patterns()
+    previous, prev_version = previous_hashes()
+    if prev_version:
+        print("VirusTotal links on %s files move to their %s counterparts" % (prev_version, CFG.version))
+    else:
+        print("no checksum record older than %s, so VirusTotal links stay as they are" % CFG.version)
     shipped = set(os.path.normcase(CFG.path(p)) for p in CFG.data.get("manualZip", []))
-    evergreen = CFG.data.get("evergreen", ["private/nexus/nexus-description.bbcode", "README.md"])
-    targets = [p for _, p in CFG.release_docs()] + [CFG.path(p) for p in evergreen]
+    targets = [p for _, p in CFG.release_docs()] + evergreen()
     for path in targets:
         if not os.path.exists(path):
             print("missing  %s" % rel(path))
@@ -188,12 +244,14 @@ def cmd_stamp():
             print("skipped  %s ships in the manual archive, so it carries no checksums" % rel(path))
             continue
         before = read(path)
-        after, touched, leftover = stamp_text(before, files, pats)
+        after, touched, leftover, unknown = stamp_text(before, files, pats, previous)
         if after != before:
             write(path, after)
         print("%-8s %s (%d lines changed)" % ("stamped" if after != before else "current", rel(path), touched))
         for l in leftover:
             print("         left alone, check it by hand: %s" % l)
+        for h in unknown:
+            print("         VirusTotal link to %s, on neither checksum record, left alone" % h)
     return 0
 
 
@@ -272,6 +330,24 @@ def cmd_check():
                     problems.append("%s lacks the %s checksum. If it has no line for %s at all, add "
                                     "'<sha256>  %s' to its checksum block, then run release-docs.py stamp"
                                     % (rel(desc), r, files[r]["name"], files[r]["name"]))
+
+    # Two differently labelled VirusTotal links on one hash means one of them
+    # reports on the wrong file. stamp did that to 1.1.4 of Private Storage
+    # Master, whose "the archive" link came out with the plugin's hash.
+    for path in [p for _, p in docs] + evergreen():
+        if not os.path.exists(path):
+            continue
+        labels = {}
+        text = read(path)
+        for pat in VT_LINKS:
+            for m in pat.finditer(text):
+                label = re.sub(r"\s+", " ", m.group("label")).strip().lower()
+                label = re.sub(r"^the ", "", label)
+                labels.setdefault(m.group("hash"), set()).add(label)
+        for h, names in sorted(labels.items()):
+            if len(names) > 1:
+                problems.append("%s has VirusTotal links %s on the same hash %s; each should carry its own file's hash"
+                                % (rel(path), " and ".join('"%s"' % n for n in sorted(names)), h))
 
     discord = dict(docs)["discord"]
     if os.path.exists(discord):
