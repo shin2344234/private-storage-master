@@ -349,12 +349,17 @@ namespace psm::Settings
                     "; already carrying stay in your bag. 0 moves the whole stack.\n"
                     "AutoStoreOnlyGained=%d\n\n"
                     "; Item numbers that never move, separated by commas, with ranges written as\n"
-                    "; 1980-1999, at most 64. The default is every currency: your money (1980,\n"
-                    "; copper and silver), the copper and silver pouches, gold bars, camp funds and\n"
+                    "; 1980-1999, at most 64. The default is the Arrow (1), so arrows you pick\n"
+                    "; back up stay in your quiver, and every currency: your money (1980, copper\n"
+                    "; and silver), the copper and silver pouches, gold bars, camp funds and\n"
                     "; supplies, Kuku currencies, faction contributions, refinement tokens, Marni\n"
                     "; tokens and the Hernand Bond. Master Looter's Never move list edits it by name.\n"
-                    "AutoStoreNeverMove=%s\n",
-                    v.autoStoreOnlyGained ? 1 : 0, never);
+                    "AutoStoreNeverMove=%s\n\n"
+                    "; Which of the mod's default lists the one above has taken in. Leave it as it\n"
+                    "; is: it is how an item added to the defaults later reaches your list once,\n"
+                    "; without coming back after you take it off.\n"
+                    "AutoStoreNeverMoveVersion=%d\n",
+                    v.autoStoreOnlyGained ? 1 : 0, never, v.autoStoreNeverMoveVersion);
             fclose(f);
             return true;
         }
@@ -406,6 +411,7 @@ namespace psm::Settings
         {
             FILE* f = nullptr;
             if (_wfopen_s(&f, Paths::File(PSM_INI).c_str(), L"r") != 0 || !f) return;
+            bool sawNeverMove = false, sawNeverMoveVersion = false;
             char line[512];
             while (fgets(line, sizeof line, f))
             {
@@ -431,7 +437,8 @@ namespace psm::Settings
                 else if (_stricmp(key, "StackMultiplier") == 0) out.stackMultiplier = atoi(val);
                 else if (_stricmp(key, "AutoStore") == 0) out.autoStore = atoi(val) != 0;
                 else if (_stricmp(key, "AutoStoreOnlyGained") == 0) out.autoStoreOnlyGained = atoi(val) != 0;
-                else if (_stricmp(key, "AutoStoreNeverMove") == 0) ParseItemList(val, out);
+                else if (_stricmp(key, "AutoStoreNeverMove") == 0) { ParseItemList(val, out); sawNeverMove = true; }
+                else if (_stricmp(key, "AutoStoreNeverMoveVersion") == 0) { out.autoStoreNeverMoveVersion = atoi(val); sawNeverMoveVersion = true; }
                 else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
@@ -476,6 +483,40 @@ namespace psm::Settings
                 if (!known) LOG_NOTE("[settings] %s is not a setting this version knows; ignored", key);
             }
             fclose(f);
+            // A list with no version was written before versions existed, so it has
+            // the first default list and nothing added since.
+            if (sawNeverMove && !sawNeverMoveVersion) out.autoStoreNeverMoveVersion = 1;
+        }
+
+        // Adds what the default never-move list gained since the ini's own list
+        // took the defaults in, once. True when the list or its version changed.
+        bool UpgradeNeverMove(Values& v)
+        {
+            if (v.autoStoreNeverMoveVersion >= kNeverMoveVersion) return false;
+            if (v.autoStoreNeverMoveVersion < 2)
+            {
+                // Version 2: the Arrow (1), at its place in the sorted list.
+                bool have = false;
+                int at = 0;
+                for (int i = 0; i < v.autoStoreNeverMoveCount; ++i)
+                {
+                    if (v.autoStoreNeverMove[i] == 1) have = true;
+                    if (v.autoStoreNeverMove[i] < 1) at = i + 1;
+                }
+                if (have) {}
+                else if (v.autoStoreNeverMoveCount >= kNeverMoveMax)
+                    LOG_NOTE("[settings] AutoStoreNeverMove is full, so the Arrow (1) was not added to it; take something off to make room");
+                else
+                {
+                    memmove(v.autoStoreNeverMove + at + 1, v.autoStoreNeverMove + at, sizeof(uint16_t) * (v.autoStoreNeverMoveCount - at));
+                    v.autoStoreNeverMove[at] = 1;
+                    ++v.autoStoreNeverMoveCount;
+                    LOG_NOTE("[settings] added the Arrow (1) to AutoStoreNeverMove, so arrows you pick back up stay in your quiver. "
+                             "Take it off in Master Looter's Never move list to store them again.");
+                }
+            }
+            v.autoStoreNeverMoveVersion = kNeverMoveVersion;
+            return true;
         }
 
         void Clamp(Values& v)
@@ -631,7 +672,8 @@ namespace psm::Settings
             ImportOld(v);
         Clamp(v);
         Deduplicate(v);
-        if (!have) WriteIni(v);
+        const bool upgraded = UpgradeNeverMove(v);
+        if (!have || upgraded) WriteIni(v);
         g_startup = new Values(v);
         Publish(v);
 
@@ -723,8 +765,10 @@ namespace psm::Settings
         ReadIni(v);
         Clamp(v);
         Deduplicate(v);
+        const bool upgraded = UpgradeNeverMove(v);
         AcquireSRWLockExclusive(&g_writeLock);
         Publish(v);
+        if (upgraded) WriteIni(v);
         ReleaseSRWLockExclusive(&g_writeLock);
         LOG_NOTE("[settings] read %s again", Paths::FileUtf8(PSM_INI).c_str());
         LogValues(v);

@@ -143,8 +143,10 @@ PSM_API int         PsmGetAutoStore(PsmAutoStore* out, int defaults);
 /* Applies at once and saves the ini. 0 with a reason in why. */
 PSM_API int         PsmApplyAutoStore(const PsmAutoStore* in, char* why, int whyLen);
 
-/* AutoStoreNeverMove: item numbers auto-store never moves. The default is every
- * currency (silver, the pouches, gold bars, camp funds, tokens and the rest). */
+/* AutoStoreNeverMove: item numbers auto-store never moves. The default is the
+ * Arrow (1) and every currency (silver, the pouches, gold bars, camp funds, tokens
+ * and the rest). Since 1.1.4 an existing list gets the Arrow once, on its first
+ * start, and keeps whatever the player does with it after that. */
 #define PSM_NEVER_MOVE_MAX 64
 /* Copies the live list, or the default when defaults is nonzero, into items.
  * Returns how many were copied, at most max. */

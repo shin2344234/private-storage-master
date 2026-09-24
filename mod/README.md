@@ -55,6 +55,9 @@ Never moved:
   camp funds, tokens and the rest. The Never move list on the Storage tab
   (AutoStoreNeverMove in the ini) holds up to 64 items and you can add or
   remove any of them.
+- Arrows you pick back up, so they stay in your quiver. Since 1.1.4 the Arrow
+  is on the Never move list, and a list from an earlier version gets it added
+  once. Take it off the list to store arrows again.
 - Anything you pick up or gather by hand, buy, craft, or take out of a storage.
 - Quest items and documents.
 - Anything while a storage or menu is open, or in a cutscene or load, and for

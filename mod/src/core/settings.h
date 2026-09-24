@@ -42,6 +42,7 @@ namespace psm::Settings
     // them, so it is never a place loot is stored.
     inline constexpr int kTownWarehouse = 7;
     inline constexpr int kNeverMoveMax = 64;
+    inline constexpr int kNeverMoveVersion = 2;   // see Values::autoStoreNeverMoveVersion
     // The largest multiple a stack limit is raised by. The per-item ceiling in
     // storage/stacks stops the result running away; this stops a typo like
     // 100000 from turning every small stack into a huge one.
@@ -84,14 +85,22 @@ namespace psm::Settings
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;
-        // Item numbers. Every currency in the game data: money (1980, which
-        // item.paloc names both Copper and Silver), the copper and silver
-        // pouches (1981 to 1988), gold bars, camp funds and supplies,
-        // Kuku currencies (to 1999), faction contributions, refinement tokens,
-        // Marni tokens and the Hernand Bond (2003 to 2018). Private Storage would
-        // otherwise take them.
-        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018};
-        int autoStoreNeverMoveCount = 36;
+        // Item numbers. The plain Arrow (1), because an arrow picked back up is
+        // ammunition and nothing but Private Storage takes it, so each one left
+        // the quiver (Fyreon87, 24 September). Then every currency in the game
+        // data: money (1980, which item.paloc names both Copper and Silver), the
+        // copper and silver pouches (1981 to 1988), gold bars, camp funds and
+        // supplies, Kuku currencies (to 1999), faction contributions, refinement
+        // tokens, Marni tokens and the Hernand Bond (2003 to 2018). Private
+        // Storage would otherwise take them.
+        uint16_t autoStoreNeverMove[kNeverMoveMax] = {1, 1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018};
+        int autoStoreNeverMoveCount = 37;
+        // Which default list the ini's own list has taken in. An ini written
+        // before 1.1.4 has a list and no version, and reads as 1; the first
+        // start then adds the Arrow to it once and saves 2, so a player who
+        // takes it off again keeps it off. Raise it with the next item that
+        // every existing list should get.
+        int autoStoreNeverMoveVersion = kNeverMoveVersion;
     };
 
     void Load();                  // once, at startup
