@@ -298,8 +298,8 @@ namespace psm::capacity
             s_agreed = 0;
             g_privateExtras = extras;
             if (t.wanted)
-                LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start.",
-                         b.cap, applied, extras);
+                LOG_NOTE("[capacity] Private Storage has %d slots. This save's expansions and story come to %d, saved for Master Looter's slider.",
+                         b.cap, extras);
             else
                 LOG("[capacity] Private Storage has %d slots, %d of them from expansions and story", b.cap, extras);
             WriteState();
