@@ -63,11 +63,9 @@ namespace psm::capacity
         constexpr int kTargetCount = static_cast<int>(sizeof g_targets / sizeof g_targets[0]);
 
         std::atomic<bool> g_patching{false};
-        int g_privateExtras = 0;       // slots the save adds on top of the default, from the state file or the ini
-        // The most any save has added. The default is shared by every save, so it
-        // has to leave room for the biggest one or that save lands past the slot
-        // array. Never lowered by learning; PrivateStorageExpansions overrides it.
-        int g_privateExtrasMost = 0;
+        // Slots the save adds on top of the default, from the state file or the ini.
+        // Only Master Looter's slider reads it now: the size no longer depends on it.
+        int g_privateExtras = 0;
         bool g_extrasFromIni = false;
 
         int ReadStateKey(const char* key, int fallback)
@@ -81,10 +79,8 @@ namespace psm::capacity
 
         void ReadState()
         {
+            // PrivateStorageExtrasMost, written from 1.0.1 to 1.1.4, is no longer read.
             g_privateExtras = ReadStateKey("PrivateStorageExtras", 0);
-            // State files from 1.0.0 have only the key above.
-            const int most = ReadStateKey("PrivateStorageExtrasMost", g_privateExtras);
-            g_privateExtrasMost = most > g_privateExtras ? most : g_privateExtras;
         }
 
         void WriteState()
@@ -93,8 +89,6 @@ namespace psm::capacity
             char v[32];
             snprintf(v, sizeof v, "%d", g_privateExtras);
             WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtras", v, file.c_str());
-            snprintf(v, sizeof v, "%d", g_privateExtrasMost);
-            WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtrasMost", v, file.c_str());
         }
 
         // Sizes from the stock record, per R2 section 6: default and max move by the
@@ -108,16 +102,20 @@ namespace psm::capacity
             t.newDefault = d;
             t.newMax = m;
             if (!t.wanted) return;
-            const int slots = Settings::Startup().slots[t.storage];
-            // Private Storage's setting is a total that counts expansions and story slots.
-            // The ceiling leaves room for the most any save has added rather than the
-            // last one: a single low reading used to lift the default so far that the
-            // next save's own extras went past the slot array (18 September, 2220 of
-            // 1460).
-            int want = t.storage == 0 ? slots - g_privateExtras : slots;
-            const int ceiling = t.storage == 0 ? kSlotArray - g_privateExtrasMost : kSlotArray;
-            if (want > ceiling) want = ceiling;
+            int want = Settings::Startup().slots[t.storage];
+            if (want > kSlotArray) want = kSlotArray;
             if (want <= d) return;
+            if (t.storage == 0)
+            {
+                // Private Storage is the setting for every save, whatever the save
+                // adds. Its extra slots come from the story alone, through SetExpand,
+                // which sets capacity to the default plus the stage's slots with no
+                // clamp and saves nothing (R2 section 3); GameTick trims that back.
+                // Max is the same number, so a later AddExpand finds capacity at max
+                // and grows by 0, and the saved count (+0x18) never moves.
+                t.newDefault = t.newMax = static_cast<uint16_t>(want);
+                return;
+            }
             const int delta = want - d;
             t.newDefault = static_cast<uint16_t>(want);
             // Housing chests save no slot count, so their max only has to hold the new
@@ -188,7 +186,7 @@ namespace psm::capacity
             return b;
         }
 
-        bool FindBucket(const char* want, Bucket& out)
+        bool FindBucket(const char* want, Bucket& out, uintptr_t* at = nullptr)
         {
             const uintptr_t holder = PlayerHolder();
             uintptr_t arr = 0;
@@ -202,6 +200,7 @@ namespace psm::capacity
                 Bucket b = ReadBucket(bk, false);
                 if (!b.ok || !IndexName(b.index, name, sizeof name) || strcmp(name, want) != 0) continue;
                 out = b;
+                if (at) *at = bk;
                 return true;
             }
             return false;
@@ -280,12 +279,13 @@ namespace psm::capacity
             const uintptr_t rec = RecordByName(t.name);
             uint16_t applied = 0;
             if (!rec || !mem::Read16(rec + 0x48, &applied)) return;
-            const int extras = b.cap - applied;
+            // The count the game asked for (+0x16), which AddExpand adds to and the
+            // story's SetExpand sets, rather than capacity less the default: GameTick
+            // trims capacity, and a trimmed reading is not the save's count.
+            const int extras = b.requested;
             if (extras < 0 || extras > kSlotArray || extras == g_privateExtras) { s_candidate = -1; s_agreed = 0; return; }
             // Without the storage hooks nothing says whether this is free play, so
-            // only ever raise the count. Too high a count sizes storage smaller,
-            // which is safe. Too low sizes it larger, and that is the direction that
-            // runs past the slot array.
+            // only ever raise the count.
             if (play == storage::Play::Unknown && extras < g_privateExtras) { s_candidate = -1; s_agreed = 0; return; }
             // While a save loads, Private Storage sits at its default for several
             // seconds before the expansions are added back, and two reads two seconds
@@ -297,13 +297,9 @@ namespace psm::capacity
             s_candidate = -1;
             s_agreed = 0;
             g_privateExtras = extras;
-            if (extras > g_privateExtrasMost) g_privateExtrasMost = extras;
-            // What Plan will give a save with this many extras on the next start.
-            const int total = Settings::Startup().slots[0];
-            const int roomed = kSlotArray - g_privateExtrasMost + extras;
             if (t.wanted)
-                LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start, "
-                         "which will size it to %d.", b.cap, applied, extras, total < roomed ? total : roomed);
+                LOG_NOTE("[capacity] Private Storage has %d slots: %d from the default and %d from expansions and story. Saved for the next start.",
+                         b.cap, applied, extras);
             else
                 LOG("[capacity] Private Storage has %d slots, %d of them from expansions and story", b.cap, extras);
             WriteState();
@@ -393,6 +389,9 @@ namespace psm::capacity
                 nextLearn = now + 2000;
                 FlushLog();
                 LearnPrivateExtras();
+                // The frame tick trims Private Storage; without the storage hooks
+                // there is no frame tick, so this thread does it instead.
+                if (!storage::Ready()) GameTick();
             }
             return 0;
         }
@@ -426,7 +425,6 @@ namespace psm::capacity
         if (v.privateStorageExpansions >= 0)
         {
             g_privateExtras = v.privateStorageExpansions < kSlotArray ? v.privateStorageExpansions : kSlotArray;
-            g_privateExtrasMost = g_privateExtras;   // the player said exactly; trust it
             g_extrasFromIni = true;
         }
         else ReadState();
@@ -469,14 +467,44 @@ namespace psm::capacity
         g_hooked = true;
         PatchLoaded();
         if (v.slots[0] > 0)
-        {
-            LOG_NOTE("[capacity] Private Storage target %d slots, counting %d from expansions and story (%s)", v.slots[0],
-                     g_privateExtras, g_extrasFromIni ? "PrivateStorageExpansions" : "learned from the save last time");
-            if (g_privateExtrasMost > g_privateExtras)
-                LOG_NOTE("[capacity] Private Storage leaves room for %d extra slots, the most any save has had, so no save goes past the "
-                         "%d-slot array. Set PrivateStorageExpansions to override.", g_privateExtrasMost, kSlotArray);
-        }
+            LOG_NOTE("[capacity] Private Storage target %d slots for every save; story slots on top are trimmed back in play", v.slots[0]);
         FlushLog();
+    }
+
+    // Private Storage is the one storage the game raises with no clamp: the
+    // story's SetExpand sets capacity to the default plus the stage's slots (R2
+    // section 3, writer 5), which would put it above the setting and can put it
+    // past the slot array. Capacity goes back to the setting, only ever down and
+    // never below what the game alone would give. It is not saved, and with max
+    // at the setting AddExpand finds capacity at or above max and grows by 0, so
+    // the saved expansion count (+0x18) does not move.
+    void GameTick()
+    {
+        static ULONGLONG s_next = 0;
+        static int s_trims = 0;
+        const Target& t = g_targets[0];
+        if (!g_hooked.load() || !t.wanted || t.patches.load() == 0) return;
+        const ULONGLONG now = GetTickCount64();
+        if (now < s_next) return;
+        s_next = now + 1000;
+        Bucket b{};
+        uintptr_t bk = 0;
+        if (!FindBucket("CampWareHouse", b, &bk) || b.slots == 0 || b.slots > kSlotArray) return;
+        int keep = t.newDefault;
+        const int stock = t.stockDefault + (b.requested > 0 ? b.requested : 0);
+        const int game = stock < t.stockMax ? stock : t.stockMax;
+        if (game > keep) keep = game;
+        if (keep > static_cast<int>(b.slots)) keep = static_cast<int>(b.slots);
+        if (b.cap <= keep) return;
+        __try
+        {
+            *reinterpret_cast<int16_t*>(bk + 0x14) = static_cast<int16_t>(keep);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+        if (++s_trims == 1)
+            LOG_NOTE("[capacity] Private Storage came to %d slots with %d from the story; set back to %d", b.cap, b.story, keep);
+        else
+            LOG("[capacity] Private Storage set back from %d to %d slots (%d times)", b.cap, keep, s_trims);
     }
 
     void RequestDump() { g_dump = true; }

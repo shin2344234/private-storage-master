@@ -345,6 +345,7 @@ namespace psm::storage
             // so a deposit never races the warehouse screen.
             inv::RefreshPlayerBag();
             deposit::Tick(g_freePlay.load() && !g_open.load() && g_switchTo < 0);
+            if (g_freePlay.load()) capacity::GameTick();
 
             if (g_switchTo >= 0 && !g_open.load())
             {

@@ -24,6 +24,8 @@ namespace psm::capacity
     void Start();
     // Log every inventory record and every storage the player has.
     void RequestDump();
+    // Game thread, once a frame in free play.
+    void GameTick();
     void Stop();
 
     bool Hooked();

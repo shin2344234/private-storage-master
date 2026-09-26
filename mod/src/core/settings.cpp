@@ -290,9 +290,9 @@ namespace psm::Settings
                     fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
             }
             fprintf(f,
-                    "\n; How many slots your expansions and story progress add to Private Storage.\n"
-                    "; -1 has the mod read it from your save and use it from the next start, so\n"
-                    "; the first start with a new PrivateStorageSlots can come out a little high.\n"
+                    "\n; How many slots story progress adds to Private Storage. -1 reads it from\n"
+                    "; your save. It only sets the left end of Master Looter's slider: Private\n"
+                    "; Storage is PrivateStorageSlots in every save whatever the story adds.\n"
                     "PrivateStorageExpansions=%d\n",
                     v.privateStorageExpansions);
             fprintf(f,
