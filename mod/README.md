@@ -1,4 +1,4 @@
-Private Storage Master 1.1.4 for Crimson Desert 2.02.00 to 2.03.02
+Private Storage Master 1.1.5 for Crimson Desert 2.02.00 to 2.03.02
 ==================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -136,9 +136,10 @@ Sizes
 
 <Name>Slots in the ini sets a storage's size, up to 1460, from the next start.
 0 keeps the game's size, and the mod never makes storage smaller than the game
-would. PrivateStorageSlots is a total that includes bought expansions. The
-Collectibles Chest is always 958. LeaveCapacityAlone=1 turns every size off,
-for use with JSON capacity mods.
+would. Since 1.1.5 Private Storage is PrivateStorageSlots in every save: the
+slots the story adds later are taken back off, never below the game's own
+size. The Collectibles Chest is always 958. LeaveCapacityAlone=1 turns every
+size off, for use with JSON capacity mods.
 
 With Master Looter installed, its menu has a Storage tab for all of this,
 loot storing included, and from 1.6.33 a Stacks tab for the multiplier above.

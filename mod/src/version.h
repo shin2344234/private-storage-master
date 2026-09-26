@@ -1,7 +1,7 @@
 #pragma once
 
 // Bump it with the release that goes with it, never on its own.
-#define PSM_VERSION  "1.1.4"
+#define PSM_VERSION  "1.1.5"
 #define PSM_NAME     "Private Storage Master"
 // The game builds the plugin was last checked against: 2.02.00 (exe
 // 1.0.0.2850) through 2.03.02 (1.0.0.2976, 23 September 2026), with 2.03.00
