@@ -1,4 +1,4 @@
-Private Storage Master 1.1.5 for Crimson Desert 2.02.00 to 2.03.02
+Private Storage Master 1.1.6 for Crimson Desert 2.02.00 to 2.03.02
 ==================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -138,8 +138,9 @@ Sizes
 0 keeps the game's size, and the mod never makes storage smaller than the game
 would. Since 1.1.5 Private Storage is PrivateStorageSlots in every save: the
 slots the story adds later are taken back off, never below the game's own
-size. The Collectibles Chest is always 958. LeaveCapacityAlone=1 turns every
-size off, for use with JSON capacity mods.
+size. The Collectibles Chest is always 958. Since 1.1.6 the Bird Feeder stays
+at the game's 50, because birds only land while it is at least 1% full.
+LeaveCapacityAlone=1 turns every size off, for use with JSON capacity mods.
 
 With Master Looter installed, its menu has a Storage tab for all of this,
 loot storing included, and from 1.6.33 a Stacks tab for the multiplier above.
