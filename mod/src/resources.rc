@@ -1,0 +1,7 @@
+// Setting labels, types, ranges and help for INI Master, which reads this
+// resource from the plugin's bytes without loading it. The type must be
+// INIMETA. Keep the file in step with core/settings.cpp; scripts/check_inimeta.py
+// compares the two.
+#include <windows.h>
+
+PSM_INIMETA INIMETA "../data/PrivateStorageMaster.inimeta"

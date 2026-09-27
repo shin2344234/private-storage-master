@@ -9,6 +9,7 @@
   "dist": "mod/dist",
   "sources": [
     "mod/src",
+    "mod/data",
     "mod/CMakeLists.txt"
   ],
   "manualZip": [
@@ -20,6 +21,10 @@
     {
       "name": "the Ctrl+F11 deposit test key is compiled out",
       "run": "findstr /C:\"PSM_DEPOSIT_TEST_KEY:BOOL=OFF\" mod\\build\\CMakeCache.txt"
+    },
+    {
+      "name": "the inimeta matches settings.cpp",
+      "run": "py -3 scripts\\check_inimeta.py"
     }
   ],
   "evergreen": [

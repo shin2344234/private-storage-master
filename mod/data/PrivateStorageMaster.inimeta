@@ -1,0 +1,467 @@
+// INI Master metadata for PrivateStorageMaster.ini, embedded in
+// PrivateStorageMaster.asi as the INIMETA resource (see src/resources.rc).
+// Keep it in step with core/settings.cpp; scripts/check_inimeta.py compares
+// the two and is a release.json gate.
+//
+// live is false at the top because the plugin has no ini watcher: it rereads
+// PrivateStorageMaster.ini at startup only. Its own settings API (used by
+// Master Looter's Storage and Stacks tabs) can change some of these while the
+// game runs, but that path changes memory directly and does not go through
+// this file, so an edit made here through INI Master always waits for the
+// next game start.
+{
+  "inimeta": 1,
+  "name": "Private Storage Master",
+  "author": "Seth",
+  "url": "https://www.nexusmods.com/crimsondesert/mods/3521",
+  "ini": "PrivateStorageMaster.ini",
+  "live": false,
+  "description": "Opens Private Storage and eight other camp and housing containers from anywhere, in the game's own warehouse screen, and can raise their capacity. Every setting here takes effect the next time the game starts, since the plugin only reads this file at startup. Master Looter's Storage and Stacks tabs, when installed, can change some of these while you play instead.",
+  "sections": {
+    "PrivateStorageMaster": {
+      "label": "Private Storage Master",
+      "order": 1,
+      "keys": {
+        "Enabled": {
+          "label": "Enabled",
+          "type": "bool",
+          "group": "General",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 turns the mod on. 0 loads it and does nothing. Takes effect next start.",
+          "order": 1
+        },
+        "DebugLog": {
+          "label": "Debug logging",
+          "type": "bool",
+          "group": "General",
+          "default": "0",
+          "true": "1",
+          "false": "0",
+          "help": "1 writes everything the mod does to PrivateStorageMaster.log. 0 writes only the startup summary, errors and the capacity dump. Turn it on for a bug report.",
+          "order": 2
+        },
+
+        "PrivateStorageKey": {
+          "label": "Private Storage key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F1",
+          "help": "Private Storage, the camp storage box. Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 10
+        },
+        "PrivateStoragePad": {
+          "label": "Private Storage controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "LB+LS",
+          "help": "Controller combo for Private Storage. Xbox button names joined with +: every button but the last is held, the last is pressed (LB+LS is hold LB, click the left stick). Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 11
+        },
+        "GatherablesKey": {
+          "label": "Gatherables Chest key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F2",
+          "help": "Gatherables Chest (housing). Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 12
+        },
+        "GatherablesPad": {
+          "label": "Gatherables Chest controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "LB+RS",
+          "help": "Controller combo for the Gatherables Chest. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 13
+        },
+        "DresserKey": {
+          "label": "Wardrobe key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F3",
+          "help": "Wardrobe (housing). Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 14
+        },
+        "DresserPad": {
+          "label": "Wardrobe controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for the Wardrobe. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 15
+        },
+        "RefrigeratorKey": {
+          "label": "Kuku Cooler key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F4",
+          "help": "Kuku Cooler (housing). Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 16
+        },
+        "RefrigeratorPad": {
+          "label": "Kuku Cooler controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for the Kuku Cooler. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 17
+        },
+        "CollectingKey": {
+          "label": "Collectibles Chest key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F5",
+          "help": "Collectibles Chest (housing). Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 18
+        },
+        "CollectingPad": {
+          "label": "Collectibles Chest controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for the Collectibles Chest. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 19
+        },
+        "CampStrawKey": {
+          "label": "Camp Straw key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F6",
+          "help": "Camp Straw, the camp feed bin. Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 20
+        },
+        "CampStrawPad": {
+          "label": "Camp Straw controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for Camp Straw. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 21
+        },
+        "BirdFeedKey": {
+          "label": "Bird Feed key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F7",
+          "help": "Bird Feed, the camp bird feeder. Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 22
+        },
+        "BirdFeedPad": {
+          "label": "Bird Feed controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for Bird Feed. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 23
+        },
+        "TownWarehouseKey": {
+          "label": "Camp Provisions key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F8",
+          "help": "Camp Provisions, the town warehouse for packaged trade goods. Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 24
+        },
+        "TownWarehousePad": {
+          "label": "Camp Provisions controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for Camp Provisions. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 25
+        },
+        "AbyssGearKey": {
+          "label": "Abyss Gear Storage key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F9",
+          "help": "Abyss gear storage, the Kuku Pot bag. Press to open it from anywhere, press again to close. Pressing another storage's key while one is open switches straight to that one. None turns the key off.",
+          "order": 26
+        },
+        "AbyssGearPad": {
+          "label": "Abyss Gear Storage controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for Abyss gear storage. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 27
+        },
+
+        "CapacityDumpKey": {
+          "label": "Capacity dump key",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F12",
+          "help": "Writes the size and contents count of every storage to the log.",
+          "order": 30
+        },
+        "HideKeysWithModifier": {
+          "label": "Hide function keys while a storage modifier is held",
+          "type": "bool",
+          "group": "Keys",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 keeps F1 to F12 from the game while a modifier your storage keys use is held, so a slip from one storage key to the next F key does not reach the game. Every other key goes through, so kicking, talking, trading and giving gifts with Ctrl held work as usual. Alt+F4 always closes the game.",
+          "order": 31
+        },
+        "HideKeysToggleKey": {
+          "label": "Toggle held-key hiding",
+          "type": "key",
+          "format": "name",
+          "group": "Keys",
+          "default": "Ctrl+F10",
+          "help": "Turns HideKeysWithModifier on and off while you play, and saves it. None for no key.",
+          "order": 32
+        },
+
+        "LeaveCapacityAlone": {
+          "label": "Leave every storage at the game's size",
+          "type": "bool",
+          "group": "Sizes",
+          "default": "0",
+          "true": "1",
+          "false": "0",
+          "help": "1 leaves every storage at the size the game (or another mod) gives it and ignores the sizes below. Use it with JSON capacity mods. Takes effect next start.",
+          "order": 40
+        },
+        "PrivateStorageSlots": {
+          "label": "Private Storage slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "0",
+          "help": "Private Storage's total slots, purchased expansions included, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 41
+        },
+        "GatherablesSlots": {
+          "label": "Gatherables Chest slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for the Gatherables Chest, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 42
+        },
+        "DresserSlots": {
+          "label": "Wardrobe slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for the Wardrobe, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 43
+        },
+        "RefrigeratorSlots": {
+          "label": "Kuku Cooler slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for the Kuku Cooler, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 44
+        },
+        "CampStrawSlots": {
+          "label": "Camp Straw slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for Camp Straw, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 45
+        },
+        "TownWarehouseSlots": {
+          "label": "Camp Provisions slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for Camp Provisions, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 46
+        },
+        "AbyssGearSlots": {
+          "label": "Abyss Gear Storage slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "1000",
+          "help": "Slots for Abyss gear storage, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
+          "order": 47
+        },
+        "PrivateStorageExpansions": {
+          "label": "Story slots to add on top",
+          "type": "int",
+          "group": "Sizes",
+          "min": -1,
+          "max": 1460,
+          "default": "-1",
+          "help": "How many slots story progress adds to Private Storage. -1 reads it from your save. It only sets the left end of Master Looter's slider: Private Storage is PrivateStorageSlots in every save whatever the story adds.",
+          "order": 50
+        }
+      }
+    },
+
+    "ItemStacks": {
+      "label": "Item stacks",
+      "order": 2,
+      "keys": {
+        "StackMultiplier": {
+          "label": "Stack size multiplier",
+          "type": "int",
+          "min": 1,
+          "max": 1000,
+          "default": "1",
+          "help": "How much of one item a single slot holds, as a multiple of the game's own limit. 1 leaves every stack alone. 5 turns a stack of 100 into 500 and a stack of 20 into 100, so the game's own differences between item kinds stay. Items the game does not stack, like gear and quest items, never start stacking, and no stack is taken past 999999. Replenishing Arrows, Bullets and Cannonballs keep the game's own size. Raising it from Master Looter's Stacks tab takes hold straight away, as long as you are in free play with no storage open; a smaller number, or any change made by hand to this file, always waits for the next game start. Your save records the bigger stacks you build, so setting this back to 1 can still leave a slot holding more than the game allows until you empty it. Do not run a stack-size data mod such as Fat Stacks at the same time.",
+          "order": 1
+        }
+      }
+    },
+
+    "AutoStore": {
+      "label": "Store loot",
+      "description": "Loot straight into storage. Needs Master Looter 1.6.28 or later; on its own this section does nothing.",
+      "order": 3,
+      "keys": {
+        "AutoStore": {
+          "label": "Auto-store loot",
+          "type": "bool",
+          "group": "General",
+          "default": "0",
+          "true": "1",
+          "false": "0",
+          "help": "Master Looter reports each item it picks up (auto-loot, body searches, gathers), and it goes to the first storage below that is on and takes it, in this order: Collectibles Chest, Abyss gear storage, Gatherables Chest, Kuku Cooler, Bird Feed, Camp Straw, Wardrobe, then Private Storage. The game's own rules decide what each one takes, and what none of them takes stays in your bag. What you pick up by hand, buy, craft or take out of storage is never moved.",
+          "order": 1
+        },
+
+        "AutoStorePrivateStorage": {
+          "label": "Store loot in Private Storage",
+          "type": "bool",
+          "group": "Storages",
+          "default": "0",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets Private Storage receive loot. It takes almost anything, so it is off by default.",
+          "order": 10
+        },
+        "AutoStoreGatherables": {
+          "label": "Store loot in the Gatherables Chest",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets the Gatherables Chest receive loot.",
+          "order": 11
+        },
+        "AutoStoreDresser": {
+          "label": "Store loot in the Wardrobe",
+          "type": "bool",
+          "group": "Storages",
+          "default": "0",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets the Wardrobe receive loot. It is off by default so new gear stays with you to look at.",
+          "order": 12
+        },
+        "AutoStoreRefrigerator": {
+          "label": "Store loot in the Kuku Cooler",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets the Kuku Cooler receive loot.",
+          "order": 13
+        },
+        "AutoStoreCollecting": {
+          "label": "Store loot in the Collectibles Chest",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets the Collectibles Chest receive loot.",
+          "order": 14
+        },
+        "AutoStoreCampStraw": {
+          "label": "Store loot in Camp Straw",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets Camp Straw receive loot.",
+          "order": 15
+        },
+        "AutoStoreBirdFeed": {
+          "label": "Store loot in Bird Feed",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets Bird Feed receive loot.",
+          "order": 16
+        },
+        "AutoStoreAbyssGear": {
+          "label": "Store loot in Abyss gear storage",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 lets Abyss gear storage receive loot.",
+          "order": 17
+        },
+
+        "AutoStoreOnlyGained": {
+          "label": "Move only what you just picked up",
+          "type": "bool",
+          "group": "General",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 moves only the amount you just picked up, so food and potions you were already carrying stay in your bag. 0 moves the whole stack.",
+          "order": 20
+        },
+
+        "AutoStoreNeverMove": {
+          "label": "Items that never move",
+          "type": "string",
+          "group": "Never move",
+          "default": "1,1980-1999,2003-2018",
+          "help": "Item numbers that never move, separated by commas, with ranges written as 1980-1999, at most 64. The default is the Arrow (1), so arrows you pick back up stay in your quiver, and every currency: your money (1980, copper and silver), the copper and silver pouches, gold bars, camp funds and supplies, Kuku currencies, faction contributions, refinement tokens, Marni tokens and the Hernand Bond. Master Looter's Never move list edits it by name.",
+          "order": 30
+        },
+        "AutoStoreNeverMoveVersion": {
+          "label": "Never-move list version",
+          "type": "int",
+          "group": "Never move",
+          "default": "2",
+          "readonly": true,
+          "advanced": true,
+          "help": "Which of the mod's default never-move lists your list has taken in. Leave it as it is: it is how an item added to the defaults later reaches your list once, without coming back after you take it off.",
+          "order": 31
+        }
+      }
+    }
+  }
+}

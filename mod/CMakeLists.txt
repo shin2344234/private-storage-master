@@ -43,7 +43,13 @@ add_library(PrivateStorageMaster SHARED
     src/storage/inventory.cpp
     src/storage/deposit.cpp
     src/api/api.cpp
+    src/resources.rc
 )
+
+# INI Master reads its metadata out of the INIMETA resource above
+# (resources.rc); rebuild when the metadata file changes.
+set_source_files_properties(src/resources.rc PROPERTIES OBJECT_DEPENDS
+    "${CMAKE_SOURCE_DIR}/data/PrivateStorageMaster.inimeta")
 
 target_include_directories(PrivateStorageMaster PRIVATE src include ${minhook_SOURCE_DIR}/src/hde)
 target_link_libraries(PrivateStorageMaster PRIVATE minhook)
