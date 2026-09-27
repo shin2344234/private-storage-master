@@ -36,8 +36,13 @@ namespace psm::Settings
     inline constexpr int kStorages = 9;
     inline constexpr int kMaxSlots = 1460;   // the slot array every storage has on 2.02
     // Sizes that are not a setting. The Collectibles Chest holds one of each of the
-    // 958 collectibles in its data, so it is always given exactly that.
-    inline constexpr int kFixedSlots[kStorages] = {0, 0, 0, 0, 958, 0, 0, 0, 0};
+    // 958 collectibles in its data, so it is always given exactly that. Bird Feed
+    // stays at the game's 50: birds land only while GetInventorySlotFillPercent
+    // (BirdFeed) is 1 or more (gimmickinfo), and at 1000 slots that took ten
+    // slots of feed (Memerlin002, 26 September). 50 is not above the game's own
+    // size, so the record is never changed.
+    inline constexpr int kFixedSlots[kStorages] = {0, 0, 0, 0, 958, 0, 50, 0, 0};
+    inline constexpr int kBirdFeed = 6;
     // Camp Provisions holds packaged trade goods, and the bag's move to it converts
     // them, so it is never a place loot is stored.
     inline constexpr int kTownWarehouse = 7;
@@ -68,7 +73,7 @@ namespace psm::Settings
         bool leaveCapacityAlone = false;
         // Slots per storage; 0 keeps the game's size. Storage 0 (Private Storage)
         // counts purchased expansions in its total, the others are the base size.
-        int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
+        int  slots[kStorages] = {0, 1000, 1000, 1000, 1000, 1000, 50, 1000, 1000};
         int  privateStorageExpansions = -1;  // -1: learn them from the save
         // How much of one item a slot holds, as a multiple of the game's own
         // limit for that item. 1 changes nothing and installs no hook. Read once

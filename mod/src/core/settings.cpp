@@ -284,7 +284,10 @@ namespace psm::Settings
                     v.leaveCapacityAlone ? 1 : 0, kMaxSlots);
             for (int i = 0; i < kStorages; ++i)
             {
-                if (kFixedSlots[i])
+                if (i == kBirdFeed)
+                    fprintf(f, "; %sSlots stays at the game's %d: birds only land while the feeder is at least\n"
+                               "; 1%% full, and a bigger feeder needs far more feed to get there.\n", kInfo[i].key, kFixedSlots[i]);
+                else if (kFixedSlots[i])
                     fprintf(f, "; %sSlots is always %d: the chest holds one of each collectible.\n", kInfo[i].key, kFixedSlots[i]);
                 else
                     fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
