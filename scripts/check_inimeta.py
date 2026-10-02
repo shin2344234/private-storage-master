@@ -16,7 +16,9 @@ core/settings.h and core/settings.cpp are the authority:
     {key}Pad in the metadata with those defaults.
   - kFixedSlots in settings.h says which storages have no size setting
     (Collecting and Bird Feed): WriteIni never writes a {key}Slots for one of
-    those, so the metadata must not describe one either.
+    those, so the metadata must not describe one either, except as hidden
+    for a line an older version left in the ini (BirdFeedSlots, retired in
+    1.1.6).
   - kTownWarehouse says which storage never receives auto-stored loot:
     WriteIni skips its AutoStore{key}, so the metadata must too.
   - Values in settings.h gives the default of every scalar and array field,
@@ -247,9 +249,10 @@ def main():
 
         slots_key = key + "Slots"
         if const["kFixedSlots"][i]:
-            if slots_key in main_keys:
+            if slots_key in main_keys and not main_keys[slots_key].get("hidden"):
                 errors.append("%s: storage %d's slot count is fixed at %d in the code and WriteIni never writes "
-                               "%s, so the metadata must not describe it" % (slots_key, i, const["kFixedSlots"][i], slots_key))
+                               "%s, so the metadata may describe it only as hidden, for a line an older version "
+                               "left in the ini" % (slots_key, i, const["kFixedSlots"][i], slots_key))
         else:
             check("PrivateStorageMaster", main_keys, slots_key, {
                 "type": "int",
@@ -272,7 +275,7 @@ def main():
     for s, fixed in zip(storages, const["kFixedSlots"]):
         expected_main.add(s["key"] + "Key")
         expected_main.add(s["key"] + "Pad")
-        if not fixed:
+        if not fixed or main_keys.get(s["key"] + "Slots", {}).get("hidden"):
             expected_main.add(s["key"] + "Slots")
     for k in sorted(set(main_keys) - expected_main):
         errors.append("%s: in the metadata's PrivateStorageMaster section but not read by, or not written by, "

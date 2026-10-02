@@ -315,6 +315,18 @@
           "default": "-1",
           "help": "How many slots story progress adds to Private Storage. -1 reads it from your save. It only sets the left end of Master Looter's slider: Private Storage is PrivateStorageSlots in every save whatever the story adds.",
           "order": 50
+        },
+        // Written by 1.1.5 and older. Since 1.1.6 the Bird Feeder stays at the
+        // game's 50 slots and the plugin ignores this line, but it only writes
+        // its ini when the file is missing, so an upgraded ini still has it.
+        // Hidden so INI Master does not offer a number that does nothing.
+        "BirdFeedSlots": {
+          "label": "Bird Feed slots (retired)",
+          "type": "int",
+          "group": "Sizes",
+          "hidden": true,
+          "help": "Retired in 1.1.6. The Bird Feeder stays at the game's 50 slots, because birds only land while it is at least 1% full and a bigger feeder needs far more feed to get there. The plugin ignores this line, and deleting it changes nothing.",
+          "order": 51
         }
       }
     },
