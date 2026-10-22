@@ -177,9 +177,27 @@ namespace psm::addr
             LOG("[addr] StageChartUIControl wrap at UIEventManager+0x%X", slot);
         }
 
-        return s.eventPost && s.requestPhase && s.modeSwitch && s.stageClose && s.inputBlockSet && s.eventManagerGlobal &&
-               s.actorManagerGlobal && s.warehouseVtable && s.eventWrapVtable && s.stageMgrVtable && s.warehouseHandler &&
-               s.phaseScreenOff && s.eventWrapOff;
+        const auto miss = [&s](uintptr_t found, const char* name)
+        {
+            if (found) return;
+            const size_t n = strlen(s.missing);
+            snprintf(s.missing + n, sizeof s.missing - n, "%s%s", n ? ", " : "", name);
+        };
+        miss(s.eventPost, "EventPost");
+        miss(s.requestPhase, "RequestPhase");
+        miss(s.modeSwitch, "ModeSwitch");
+        miss(s.stageClose, "StageClose");
+        miss(s.inputBlockSet, "InputBlockSet");
+        miss(s.eventManagerGlobal, "EventManager");
+        miss(s.actorManagerGlobal, "ActorManager");
+        miss(s.warehouseVtable, "Warehouse2");
+        miss(s.warehouseHandler, "warehouse handler");
+        miss(s.eventWrapVtable, "event wrap");
+        miss(s.stageMgrVtable, "stage manager");
+        miss(s.phaseScreenOff, "screen byte");
+        miss(s.eventWrapOff, "wrap slot");
+
+        return !s.missing[0];
     }
 
     bool ResolveCapacity(Capacity& c)

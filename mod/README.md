@@ -142,6 +142,13 @@ size. The Collectibles Chest is always 958. Since 1.1.6 the Bird Feeder stays
 at the game's 50, because birds only land while it is at least 1% full.
 LeaveCapacityAlone=1 turns every size off, for use with JSON capacity mods.
 
+The housing chests (Gatherables Chest, Wardrobe, Kuku Cooler) are 10 slots in the
+game's data, and the game adds the slots of the furniture you have placed on
+top of that itself. A size of 0 leaves that to the game, and the mod does not
+work the sum out. A report on 1.1.6 saw the furniture's slots when a chest was
+opened inside the house and only 10 when it was opened from elsewhere. A size
+above 10 for a chest gives it that many slots wherever you open it.
+
 With Master Looter installed, its menu has a Storage tab for all of this,
 loot storing included, and from 1.6.33 a Stacks tab for the multiplier above.
 

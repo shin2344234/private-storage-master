@@ -25,6 +25,9 @@ namespace psm::addr
         // 1.0.0.2944 and so are read out of the code rather than written down.
         unsigned  phaseScreenOff = 0;   // phase manager + this = the current screen byte
         unsigned  eventWrapOff = 0;     // UIEventManager + this = the StageChartUIControl wrap
+        // Names of what ResolveStorage could not find, comma separated, for the
+        // one line that tells the player why the storage keys are off.
+        char      missing[192] = {};
     };
 
     struct Capacity

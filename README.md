@@ -22,6 +22,12 @@ moves and money stays with you. Since 1.1.4, so do arrows you pick back up. It i
 Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
 needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
 
+A housing chest left at a size of 0 has the game's 10 slots, and the game adds
+your furniture's slots to them. A report saw those extra slots only inside the
+house, so a chest opened from far away can show 10. Give the chest a size above
+10 and it has that many anywhere. [mod/README.md](mod/README.md) has more under
+Sizes.
+
 It takes over from Private Storage Anywhere by Stevi2195 and PrivateStoragePlus
 2.0 by jkiip. It was written from scratch and contains no code from either; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

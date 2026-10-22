@@ -110,8 +110,10 @@ namespace psm::storage
               "SetWareHouseInventoryName(UI_Inventory_KukuItemList)", "2520550823", "3472366085", "cd_icon_map_kukushop", nullptr },
         };
 
-        // Stage ids for the mod's screens. Live ids are small and count up from boot.
-        uint64_t g_nextId = 900000000;
+        // Stage ids for the mod's screens. Live ids are small and count up from boot,
+        // so an id at or past kOwnIdBase was never a game stage's.
+        constexpr uint64_t kOwnIdBase = 900000000;
+        uint64_t g_nextId = kOwnIdBase;
         SsNode* g_view = nullptr, *g_selector = nullptr;
         SsNode* g_itemText[Settings::kStorages][8] = {};   // per chest: icon, title hash, modal hash, extra, setInventory, title
 
@@ -132,6 +134,9 @@ namespace psm::storage
         uint32_t g_frames = 0;
         uintptr_t g_blockMgr = 0;
         uint64_t  g_blockKey = 0;
+        // An open dropped because the game left play. Its input block and menu
+        // phase request are still ours to give back once play resumes.
+        bool      g_orphan = false;
         int      g_switchTo = -1;       // open this one once the last close has gone through
         uint32_t g_switchFrames = 0;
         std::atomic<DWORD> g_closedAt{0};
@@ -237,9 +242,48 @@ namespace psm::storage
         {
             g_blockMgr = 0;
             g_blockKey = 0;
+            g_orphan = false;
             g_open = false;
             g_openChest = -1;
             g_closedAt = GetTickCount();
+        }
+
+        // The screen is no longer the mod's, and the game has not been told. Gives
+        // back what Open took: the menu phase request, without which the game stays
+        // on the chest screen with nobody to close it (Esc goes to a stage id the
+        // game no longer knows, and the gate refuses every storage key because the
+        // screen is not Ingame), and the input block. `phase` is false when a game
+        // stage has the screen and will end the phase itself.
+        void ReleaseScreen(uintptr_t pm, bool phase)
+        {
+            if (phase && !PhaseGuarded(pm, kPhaseIngameMenu, false)) LOG_ERR("[storage] leaving the menu phase faulted");
+            if (g_blockMgr && !InputBlockGuarded(g_blockMgr, g_blockKey, 0)) LOG_ERR("[storage] removing the input block faulted");
+            Forget();
+        }
+
+        // The game left play (mode other than 4) with a storage open. A quit to the
+        // title tears the stage manager down, so nothing is posted or released
+        // while the game is away. The block and the phase request are kept for
+        // SettleOrphan, which runs when the mode is 4 again.
+        void Orphan()
+        {
+            g_orphan = true;
+            g_open = false;
+            g_openChest = -1;
+            g_closedAt = GetTickCount();
+        }
+
+        // Back in play after Orphan. The phase request survives a loading screen
+        // or a cutscene, and with it the chest screen, so it is turned off here
+        // whatever the screen byte says. The input block goes back only to the
+        // stage manager that took it: after a logout that one is gone.
+        void SettleOrphan(uintptr_t pm, uint8_t screen)
+        {
+            const uintptr_t mgr = g_blockMgr ? StageManager() : 0;
+            LOG_NOTE("[storage] back in play (screen 0x%02X) after the game left it with a storage open; giving the screen back%s",
+                     screen, g_blockMgr && mgr != g_blockMgr ? " (the stage manager it was opened on is gone)" : "");
+            if (mgr != g_blockMgr) g_blockMgr = 0;
+            ReleaseScreen(pm, true);
         }
 
         void Close(uintptr_t pm, const char* reason)
@@ -331,14 +375,18 @@ namespace psm::storage
         // Once per frame, after the game's own mode switch.
         void Tick(uintptr_t pm)
         {
+            uint8_t mode = 0, screen = 0;
+            mem::Read8(pm + 0x28, &mode);
+            mem::Read8(pm + A.phaseScreenOff, &screen);
+            // Before anything can open: an open dropped on leaving play is settled
+            // on the first frame back, so a new one does not overwrite its block.
+            if (g_orphan && mode == 4) SettleOrphan(pm, screen);
+
             const int act = g_pending.exchange(kActNone);
             if (act >= 0 && act < Settings::kStorages) { g_switchTo = -1; Request(pm, act); }
 
             if (g_closeRequested.exchange(false) && g_open.load()) Close(pm, "Esc or B");
 
-            uint8_t mode = 0, screen = 0;
-            mem::Read8(pm + 0x28, &mode);
-            mem::Read8(pm + A.phaseScreenOff, &screen);
             g_freePlay = mode == 4 && screen == kScreenIngame;
             g_lastTick = GetTickCount();
             // Loot moves only in free play, with no storage open or about to open,
@@ -357,11 +405,13 @@ namespace psm::storage
             if (!g_open.load()) return;
             ++g_frames;
             // Quitting to the title with a screen open tears down the stage manager
-            // and the UI (mode 5, then 7). Forget the screen without touching either.
+            // and the UI (mode 5, then 7), and a loading screen leaves play too.
+            // Touch neither now; SettleOrphan gives the screen back when play resumes.
             if (mode != 4)
             {
-                LOG("[storage] the game left play (mode %u) with %s open; forgetting it", mode, kChests[g_openChest.load()].label);
-                Forget();
+                LOG_NOTE("[storage] the game left play (mode %u) with %s open; it is given back when play resumes", mode,
+                         kChests[g_openChest.load()].label);
+                Orphan();
                 return;
             }
             if (g_frames == 150)
@@ -373,11 +423,30 @@ namespace psm::storage
             {
                 uint64_t cur = 0;
                 const uintptr_t c = g_warehouse.load();
-                if (c && mem::Read64(c + 0x128, &cur) && cur != g_openId.load())
+                // A cutscene, a dialog, a minigame or a fade has taken the screen (every
+                // id below the main menu's 0x0D). The chest screen would come back when
+                // it ends, with no way to close it, so close it now, the way Esc does.
+                if (screen < 0x0D)
                 {
-                    LOG("[storage] the warehouse screen now belongs to stage %llu, not ours; letting it go", cur);
-                    if (g_blockMgr) InputBlockGuarded(g_blockMgr, g_blockKey, 0);
-                    Forget();
+                    LOG_NOTE("[storage] the game moved to screen 0x%02X while %s was open; closing it", screen, kChests[g_openChest.load()].label);
+                    Close(pm, "another screen took over");
+                }
+                else if (c && mem::Read64(c + 0x128, &cur) && cur != g_openId.load())
+                {
+                    if (cur == 0 || cur >= kOwnIdBase)
+                    {
+                        // No game stage has the screen, so the menu phase it is showing under
+                        // is the mod's and nobody else will end it.
+                        LOG_NOTE("[storage] the warehouse screen is held by stage %llu, not ours (%llu), and that is not a game stage; closing it",
+                                 cur, g_openId.load());
+                        ReleaseScreen(pm, true);
+                    }
+                    else
+                    {
+                        // A game stage has the screen and ends its own phase.
+                        LOG_NOTE("[storage] the warehouse screen now belongs to game stage %llu, not ours; letting it go", cur);
+                        ReleaseScreen(pm, false);
+                    }
                 }
                 else if (screen == kScreenIngame)
                 {
@@ -680,6 +749,11 @@ namespace psm::storage
             // error line, once, and finding it later is worth a note, once.
             const DWORD pollStart = GetTickCount();
             bool saidMissing = false, saidFound = false;
+            // "The keys do nothing" has two causes that look alike from outside: a key
+            // press that never reached this thread, and one that did and was refused.
+            // The first press is a note, so a default log shows which, and a per-frame
+            // hook that never runs is an error, since nothing else can act then.
+            bool sawKey = false, saidNoTick = false;
             while (!g_stop.load())
             {
                 Sleep(16);
@@ -699,6 +773,13 @@ namespace psm::storage
                         saidFound = true;
                     }
                     nextWindowCheck = now + 500;
+                }
+
+                if (!saidNoTick && now - pollStart > 120000 && !g_lastTick.load())
+                {
+                    LOG_ERR("[keys] The game's per-frame update has not reached this mod in two minutes, so the storage keys cannot act. "
+                            "Another mod may have replaced ModeSwitch.");
+                    saidNoTick = true;
                 }
 
                 const bool front = GameInFront();
@@ -721,7 +802,9 @@ namespace psm::storage
                     if (down && !keyWas[i] && !paused)
                     {
                         char t[32];
-                        LOG("[keys] %s", Settings::KeyText(k, t, sizeof t));
+                        Settings::KeyText(k, t, sizeof t);
+                        if (!sawKey) { sawKey = true; LOG_NOTE("[keys] first bound key this session: %s", t); }
+                        else LOG("[keys] %s", t);
                         if (i < Settings::kStorages) g_pending = i;
                         else if (i == Settings::kStorages) capacity::RequestDump();
                         else ToggleHideKeys();
@@ -784,7 +867,10 @@ namespace psm::storage
     {
         if (!addr::ResolveStorage(A))
         {
-            LOG_ERR("[storage] this game version does not match what the mod needs, so storage keys are turned off");
+            // This is the line Master Looter's Status tab shows as the last error, so
+            // it names what was missing and the build, and fits in its 255 characters.
+            LOG_ERR("[storage] Storage keys are off: this game build (image %zu bytes) has no match for %s. The [addr] lines in PrivateStorageMaster.log say why.",
+                    mem::Game().size, A.missing);
             return false;
         }
         g_view = MakeSs("WareHouseView");
@@ -808,7 +894,7 @@ namespace psm::storage
                         Hook("ModeSwitch", A.modeSwitch, hkModeSwitch, &oModeSwitch);
         if (!ok)
         {
-            LOG_ERR("[storage] a hook failed, so storage keys are turned off. Another storage mod may have hooked the same place.");
+            LOG_ERR("[storage] Storage keys are off: a hook could not go in (see the line above). Another mod may have hooked the same place.");
             farhook::RemoveAll();
             return false;
         }

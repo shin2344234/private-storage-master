@@ -438,6 +438,11 @@ namespace psm::capacity
             Sleep(500);
         }
         inv::SetAddresses(g_addr);   // deposits and the size table read through these
+        // Loot storing needs the item move and the four things CanMove checks. Master
+        // Looter's tab only says "could not find the move it needs", so say which.
+        if (!g_addr.clientMoveItem || !g_addr.invMgrGlobal || !g_addr.invMgrVtable || !g_addr.actorManagerGlobal)
+            LOG_ERR("[capacity] Loot storing is unavailable: this game build has no match for %s. The [addr] lines in PrivateStorageMaster.log say why.",
+                    !g_addr.clientMoveItem ? "ClientMoveItem" : !g_addr.invMgrGlobal || !g_addr.invMgrVtable ? "InventoryInfoManager" : "ActorManager");
         g_thread = CreateThread(nullptr, 0, Worker, nullptr, 0, nullptr);
         if (!any)
         {
