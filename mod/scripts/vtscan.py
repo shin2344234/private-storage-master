@@ -1,8 +1,7 @@
 """Look up, and optionally submit, the release files on VirusTotal.
 
     py -3 vtscan.py             report what VirusTotal already knows
-    py -3 vtscan.py --upload    submit anything it has never seen, ask for an
-                                analysis of anything it holds but never
+    py -3 vtscan.py --upload    submit anything it has never seen or never
                                 analysed, then wait
     py -3 vtscan.py --prose     also print the paragraphs the README and the
                                 Nexus description want, with the numbers filled in
@@ -136,7 +135,13 @@ def wait_for(key, aid):
 def report_for(key, path, do_upload):
     digest = sha256(path)
     got = call(key, "/files/" + digest)
-    if got is None:
+    # VirusTotal can hold a file it never analyses. Broomy 1.0.5's plugin was
+    # accepted by an upload on 22 October 2026 and still had no analysis an
+    # hour later, through two /files/<sha256>/analyse requests, the site's
+    # Reanalyze. A second upload of the same file was analysed in two minutes,
+    # so a file in that state is uploaded again.
+    never = got is not None and not got["data"]["attributes"].get("last_analysis_date")
+    if got is None or (never and do_upload):
         if not do_upload:
             return digest, None, "never scanned; run with --upload to submit it"
         size = os.path.getsize(path)
@@ -149,23 +154,13 @@ def report_for(key, path, do_upload):
         got = call(key, "/files/" + digest)
         if got is None:
             return digest, None, "analysed but no file report yet"
-    elif do_upload and not got["data"]["attributes"].get("last_analysis_date"):
-        # VirusTotal can hold a file it never analyses. Broomy 1.0.5's plugin
-        # was accepted by an upload on 22 October 2026 and still had no
-        # analysis 30 minutes later, so every run read 0/0. This asks for one,
-        # as the site's Reanalyze button does.
-        sub = call(key, "/files/%s/analyse" % digest, "POST", b"", "application/x-www-form-urlencoded")
-        if not wait_for(key, sub["data"]["id"]):
-            return digest, None, "analysis requested but not complete in twenty minutes"
-        got = call(key, "/files/" + digest)
     return digest, got["data"]["attributes"], None
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--upload", action="store_true",
-                    help="submit any file VirusTotal has never seen, and ask for an "
-                         "analysis of any it holds but never analysed")
+                    help="submit any file VirusTotal has never seen or never analysed")
     ap.add_argument("--prose", action="store_true",
                     help="print the README and description paragraphs")
     ap.add_argument("--version", help="override the version read from version.h")
@@ -199,7 +194,7 @@ def main():
             if attrs.get("last_analysis_date"):
                 print("%-34s 0/0  no engine has reported yet; run again in a few minutes" % name)
             else:
-                print("%-34s 0/0  VirusTotal holds it but never analysed it; run with --upload to ask" % name)
+                print("%-34s 0/0  VirusTotal holds it but never analysed it; run with --upload to send it again" % name)
             print("%-34s %s%s" % ("", GUI, digest))
             rows.append((name, label, digest, None, None))
             continue
