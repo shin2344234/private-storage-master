@@ -22,6 +22,13 @@ moves and money stays with you. Since 1.1.4, so do arrows you pick back up. It i
 Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
 needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
 
+New in 1.1.7: a cutscene, dialog, minigame or fade that starts while a storage is
+open closes the storage, where it used to leave the chest menu on screen with Esc
+and the storage keys doing nothing. When the storage keys are off, the log and
+Master Looter's Last error now name what the plugin could not find. INI Master
+shows every setting with its range and help, and no longer offers the retired
+Bird Feed size.
+
 A housing chest left at a size of 0 has the game's 10 slots, and the game adds
 your furniture's slots to them. A report saw those extra slots only inside the
 house, so a chest opened from far away can show 10. Give the chest a size above
@@ -53,11 +60,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.6:
+SHA-256 for 1.1.7:
 
-    311dff9ae9a4f66e42f83d710ba90aea0f68dcf994f752a41ebcce992ee24e85  PrivateStorageMaster-1.1.6-DMM.zip
-    b66ea8dbb483a3d58ab47be47ea33e4e4e169c39e29ce5e5cbd61ad599b24537  PrivateStorageMaster-1.1.6.zip
-    46c09cc2b1d784b5cce12b8ba5112c24bd2265d8c1a7320b30976d3b71324248  PrivateStorageMaster.asi
+    fb5fc1eb5641e29b103a84f322f97469b68a5324cad5ef4cfeb81bf9caa08983  PrivateStorageMaster-1.1.7-DMM.zip
+    69ee1ab6402108d2e364e1ec194257706f69b2e1c4ee5a5c75a07ed01462a42b  PrivateStorageMaster-1.1.7.zip
+    dbe059991ae19d4c724ce1cd6fa37fff9c208f73c9dfb212f130620d9ed7ac19  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

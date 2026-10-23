@@ -1,4 +1,4 @@
-Private Storage Master 1.1.6 for Crimson Desert 2.02.00 to 2.03.02
+Private Storage Master 1.1.7 for Crimson Desert 2.02.00 to 2.03.02
 ==================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -90,6 +90,12 @@ Keys
 
 The same key closes. Another storage's key switches straight to it. Esc and B
 close too. Keys only work in free play.
+
+Since 1.1.7, a cutscene, dialog, minigame or fade that starts while a storage
+is open closes the storage for you, the way Esc does. Before, the chest menu could
+stay on screen with Esc and the storage keys doing nothing. If a storage key does
+nothing at all, PrivateStorageMaster.log names the game functions the plugin could
+not find on your game build, and Master Looter shows the same text as Last error.
 
 Holding Ctrl keeps F1 to F12 from the game, so a slip from one storage key to
 the next F key goes nowhere. Every other key gets through, because Ctrl is also
