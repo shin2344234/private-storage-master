@@ -67,11 +67,12 @@ namespace psm::storage
 
         constexpr uint32_t kPlayerActor     = 0xA0100001;  // what every natural open carried
         constexpr uint8_t  kPhaseIngameMenu = 0x0E;
-        // Verified unchanged between 1.0.0.2850 and 1.0.0.2944: the screen name
-        // table is compared in the same order on both, with Ingame at index 16.
-        // The byte holding this value moved, not the value, so the offset is
-        // derived (A.phaseScreenOff) while the constant stays written down.
-        constexpr uint8_t  kScreenIngame    = 0x10;
+        // Ingame's index in the phase manager's screen name table. It was 16 from
+        // 1.0.0.2850 to 1.0.0.2976, and the DLC build inserted InteractionSubMenu
+        // at 16, which pushed Ingame to 17. Every screen up to IngameMenu (0x0E)
+        // kept its number. The byte holding the value is derived
+        // (A.phaseScreenOff); the value stays written down.
+        constexpr uint8_t  kScreenIngame    = 0x11;
 
         struct Chest
         {
@@ -230,9 +231,9 @@ namespace psm::storage
             uint8_t mode = 0, screen = 0, blocked = 0;
             uint32_t queued = 0;
             uintptr_t proc = 0;
-            mem::Read8(pm + 0x28, &mode);
+            mem::Read8(pm + A.phaseModeOff, &mode);
             mem::Read8(pm + A.phaseScreenOff, &screen);
-            mem::Read32(pm + 0x70, &queued);
+            mem::Read32(pm + A.phaseQueuedOff, &queued);
             if (mem::ReadPtr(pm + 0x10, &proc)) mem::Read8(proc + 0xA0, &blocked);
             snprintf(why, cap, "mode %u screen 0x%02X queued %u blocked %u", mode, screen, queued, blocked);
             return mode == 4 && screen == kScreenIngame && queued == 0 && proc && blocked == 0;
@@ -376,7 +377,7 @@ namespace psm::storage
         void Tick(uintptr_t pm)
         {
             uint8_t mode = 0, screen = 0;
-            mem::Read8(pm + 0x28, &mode);
+            mem::Read8(pm + A.phaseModeOff, &mode);
             mem::Read8(pm + A.phaseScreenOff, &screen);
             // Before anything can open: an open dropped on leaving play is settled
             // on the first frame back, so a new one does not overwrite its block.

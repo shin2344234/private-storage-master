@@ -21,7 +21,12 @@ namespace psm::capacity
     {
         using Fn4 = uintptr_t(__fastcall*)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 
-        constexpr int kSlotArray = 1460;   // bucket +0x08 on 2.02; checked against live storage in the dump
+        // The most slots any storage can have. On 2.02 and 2.03 every bucket's array
+        // was this size from the start. The DLC build allocates it lazily: bucket
+        // +0x08 is 0 until something goes in, then grows 100 at a time up to the
+        // game's global holding 1460 (+DA76620 caps the grow there), so +0x08 is
+        // no limit on capacity any more.
+        constexpr int kSlotArray = 1460;
         constexpr const wchar_t* kStateFile = L"PrivateStorageMaster.state";
 
         addr::Capacity g_addr;
@@ -135,7 +140,7 @@ namespace psm::capacity
                 if (!t.wanted || strcmp(name, t.name) != 0) continue;
                 uint16_t d = 0, m = 0;
                 uint8_t needSave = 0;
-                if (!mem::Read16(rec + 0x48, &d) || !mem::Read16(rec + 0x4A, &m) || !mem::Read8(rec + 0x9D, &needSave)) return;
+                if (!mem::Read16(rec + inv::kRecDefault, &d) || !mem::Read16(rec + inv::kRecMax, &m) || !mem::Read8(rec + inv::kRecNeedSave, &needSave)) return;
                 if (!t.seen.load())
                 {
                     Plan(t, d, m, needSave);
@@ -146,8 +151,8 @@ namespace psm::capacity
                 if (d != t.stockDefault || m != t.stockMax) return; // not the data this plan was made from; leave it
                 __try
                 {
-                    *reinterpret_cast<uint16_t*>(rec + 0x48) = t.newDefault;
-                    *reinterpret_cast<uint16_t*>(rec + 0x4A) = t.newMax;
+                    *reinterpret_cast<uint16_t*>(rec + inv::kRecDefault) = t.newDefault;
+                    *reinterpret_cast<uint16_t*>(rec + inv::kRecMax) = t.newMax;
                     ++t.patches;
                 }
                 __except (EXCEPTION_EXECUTE_HANDLER) {}
@@ -218,7 +223,7 @@ namespace psm::capacity
                 uintptr_t rec = 0;
                 char name[40] = "(not loaded)";
                 uint16_t d = 0, m = 0;
-                if (mem::ReadPtr(arr + 8ull * i, &rec)) { RecordName(rec, name, sizeof name); mem::Read16(rec + 0x48, &d); mem::Read16(rec + 0x4A, &m); }
+                if (mem::ReadPtr(arr + 8ull * i, &rec)) { RecordName(rec, name, sizeof name); mem::Read16(rec + inv::kRecDefault, &d); mem::Read16(rec + inv::kRecMax, &m); }
                 const Target* t = nullptr;
                 for (const Target& x : g_targets)
                     if (x.seen.load() && strcmp(name, x.name) == 0) t = &x;
@@ -252,8 +257,8 @@ namespace psm::capacity
                 if (!b.ok) continue;
                 char name[40];
                 IndexName(b.index, name, sizeof name);
-                LOG_NOTE("[dump]   %-26s %4u of %4d slots used (array %u), expansions bought %d, from story %d%s", name, b.filled, b.cap, b.slots,
-                         b.granted, b.story, b.cap > static_cast<int>(b.slots) ? "  CAPACITY IS PAST THE SLOT ARRAY" : "");
+                LOG_NOTE("[dump]   %-26s %4u of %4d slots used (%u allocated), expansions bought %d, from story %d%s", name, b.filled, b.cap, b.slots,
+                         b.granted, b.story, b.cap > kSlotArray ? "  CAPACITY IS PAST THE GAME'S SLOT LIMIT" : "");
             }
         }
 
@@ -278,7 +283,7 @@ namespace psm::capacity
             if (!FindBucket("CampWareHouse", b) || b.cap <= 0) return;
             const uintptr_t rec = RecordByName(t.name);
             uint16_t applied = 0;
-            if (!rec || !mem::Read16(rec + 0x48, &applied)) return;
+            if (!rec || !mem::Read16(rec + inv::kRecDefault, &applied)) return;
             // The count the game asked for (+0x16), which AddExpand adds to and the
             // story's SetExpand sets, rather than capacity less the default: GameTick
             // trims capacity, and a trimmed reading is not the save's count.
@@ -343,7 +348,7 @@ namespace psm::capacity
                 if (const uintptr_t rec = RecordByName(t.name))
                 {
                     uint16_t d = 0, m = 0;
-                    if (mem::Read16(rec + 0x48, &d) && mem::Read16(rec + 0x4A, &m))
+                    if (mem::Read16(rec + inv::kRecDefault, &d) && mem::Read16(rec + inv::kRecMax, &m))
                     {
                         o.known = true;
                         o.appliedDefault = d;
@@ -356,7 +361,7 @@ namespace psm::capacity
                 if (FindBucket(t.name, b))
                 {
                     o.liveCapacity = b.cap;
-                    o.slotArray = static_cast<int>(b.slots);
+                    o.slotArray = kSlotArray;   // the ceiling, not the part allocated so far
                     o.extras = b.granted + b.story;
                     uintptr_t holder = PlayerHolder(), arr = 0, bk = 0;
                     uint32_t n = 0;
@@ -494,12 +499,15 @@ namespace psm::capacity
         s_next = now + 1000;
         Bucket b{};
         uintptr_t bk = 0;
-        if (!FindBucket("CampWareHouse", b, &bk) || b.slots == 0 || b.slots > kSlotArray) return;
+        // Not the allocated part of the array (+0x08): on the DLC build it starts at
+        // 0 or 100 and grows as items go in, and trimming to it put a 1460 setting
+        // back to 100.
+        if (!FindBucket("CampWareHouse", b, &bk) || b.slots > kSlotArray) return;
         int keep = t.newDefault;
         const int stock = t.stockDefault + (b.requested > 0 ? b.requested : 0);
         const int game = stock < t.stockMax ? stock : t.stockMax;
         if (game > keep) keep = game;
-        if (keep > static_cast<int>(b.slots)) keep = static_cast<int>(b.slots);
+        if (keep > kSlotArray) keep = kSlotArray;
         if (b.cap <= keep) return;
         __try
         {

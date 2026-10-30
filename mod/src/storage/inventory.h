@@ -27,6 +27,15 @@ namespace psm::inv
     uintptr_t RecordByName(const char* want);
     int IndexByName(const char* want);
 
+    // InventoryInfo record fields on exe 1.0.0.3392, which reordered the record
+    // small fields first (2.03 had the name at +0x08, default +0x48, max +0x4A,
+    // needSave +0x9D). ResolveCapacity checks the reader writes these.
+    constexpr unsigned kRecName = 0x00;       // staticstringA node, first qword the text
+    constexpr unsigned kRecNeedSave = 0x0D;   // one byte: the save keeps the slot count
+    constexpr unsigned kRecDefault = 0x10;    // two bytes
+    constexpr unsigned kRecMax = 0x14;        // two bytes
+    constexpr unsigned kRecMoveList = 0x38;   // pointer, count at +0x40, element stride 0xA0
+
     uintptr_t PlayerCharacter();
     // The bag of whoever is being played, as the game itself resolves it, borrowed
     // bag included (Damiane and Oongka use Kliff's). Game thread only, since it

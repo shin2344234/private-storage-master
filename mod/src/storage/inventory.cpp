@@ -41,7 +41,7 @@ namespace psm::inv
     {
         uintptr_t node = 0, text = 0;
         out[0] = 0;
-        return mem::ReadPtr(rec + 8, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
+        return mem::ReadPtr(rec + kRecName, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
     }
 
     bool IndexName(uint16_t index, char* out, size_t cap)
@@ -182,9 +182,15 @@ namespace psm::inv
 
     int64_t ItemTotal(uintptr_t bucket, uint16_t item)
     {
-        const uint32_t size = SlotCount(bucket);
+        // An empty storage on the DLC build has no slots allocated at all, which is
+        // a total of 0, not a bucket that cannot be read.
+        uint32_t size = 0;
+        if (!bucket || !mem::Read32(bucket + 0x08, &size)) return -1;
+        size &= 0xFFFF;
+        if (size > 4096) return -1;
+        if (!size) return 0;
         uintptr_t slots = 0;
-        if (!size || !mem::ReadPtr(bucket, &slots)) return -1;
+        if (!mem::ReadPtr(bucket, &slots)) return -1;
         int64_t total = 0;
         for (uint32_t k = 0; k < size; ++k)
         {
@@ -201,7 +207,7 @@ namespace psm::inv
     {
         uintptr_t list = 0;
         uint32_t n = 0;
-        if (!mem::ReadPtr(rec + 0x38, &list) || !mem::Read32(rec + 0x40, &n) || n > 64) return -1;
+        if (!mem::ReadPtr(rec + kRecMoveList, &list) || !mem::Read32(rec + kRecMoveList + 8, &n) || n > 64) return -1;
         for (uint32_t i = 0; i < n; ++i)
         {
             const uintptr_t e = list + 0xA0ull * i;
