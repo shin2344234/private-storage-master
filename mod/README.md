@@ -1,5 +1,5 @@
-Private Storage Master 1.1.7 for Crimson Desert 2.02.00 to 2.03.02
-==================================================================
+Private Storage Master 1.1.8 for Crimson Desert 1.0.0.3392 and 1.0.0.3424
+=========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
 storage's size, raises how much one slot holds of an item, and with Master
@@ -7,6 +7,10 @@ Looter puts your loot straight into storage.
 
 Install
 -------
+
+1.1.8 runs only on the DLC update, exe 1.0.0.3392 and 1.0.0.3424. On 2.02.00
+to 2.03.02, use 1.1.7, which stays on the Files tab. Your ini carries over
+either way.
 
 1. Remove PrivateStorageAnywhere.asi from bin64 and disable it in your mod
    manager. Leave its ini in place for the first launch so your bindings are
