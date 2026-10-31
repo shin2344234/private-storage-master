@@ -84,6 +84,13 @@ namespace psm::addr
         // to 2.03.02 and is slot 146 on the DLC build, which put two slots ahead
         // of it and left a shared `ret 0` stub in slot 144. Exactly one slot of
         // the 173 has that shape, so look for it rather than at a number.
+        //
+        // Other mods swap slots of this vtable for their own functions. Camp
+        // Funds Withdraw points slot 17 into its DLL, and the walk used to stop
+        // at the first slot outside the game, so it never reached 146 and the
+        // storage keys went off (majahkil, 2.04.03). A slot that points at
+        // executable code anywhere is still a slot. The table ends at the next
+        // vtable's locator in .rdata, which is not executable.
         uintptr_t WarehouseHandler(uintptr_t vt)
         {
             uintptr_t found = 0;
@@ -91,7 +98,12 @@ namespace psm::addr
             for (; slots < 512; ++slots)
             {
                 uintptr_t fn = 0;
-                if (!mem::ReadPtr(vt + 8ull * slots, &fn) || !mem::InImage(fn) || !mem::Executable(fn, 16)) break;
+                if (!mem::ReadPtr(vt + 8ull * slots, &fn) || !mem::Executable(fn, 16)) break;
+                if (!mem::InImage(fn))
+                {
+                    LOG_NOTE("[addr] Warehouse2 slot %d points outside the game at %p, another mod's hook", slots, reinterpret_cast<void*>(fn));
+                    continue;
+                }
                 for (size_t i = 0; i + 6 <= 0x60; ++i)
                 {
                     if (!mem::MatchAt(fn + i, "49 8B D9")) continue;
