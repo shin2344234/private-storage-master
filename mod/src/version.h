@@ -13,7 +13,7 @@
 // PsmStatus::gameVersion, which is char[16] and part of the shipped API, so keep
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from
 // PsmGetStatus as "2.02.00 and 2.0".
-#define PSM_GAME     "1.0.0.3392-3460"
+#define PSM_GAME     "1.0.0.3392-3462"
 // Base name of the plugin's files next to it: PrivateStorageMaster.asi, .ini, .log.
 #define PSM_FILEBASE L"PrivateStorageMaster"
 // The same as narrow text, for the module name another plugin looks us up by.
