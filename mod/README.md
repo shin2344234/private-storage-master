@@ -168,7 +168,7 @@ Reporting a problem
 Set DebugLog=1, play until it happens, close the game and attach
 PrivateStorageMaster.log from bin64. For stacks the log says how many items were
 raised and the biggest limit written, and names the first ten. The two sessions before it are kept as
-PrivateStorageMaster.01.log and .02.log, or the last 24 with DebugLog=1. For
+PrivateStorageMaster.01.log and .02.log, or the last five with DebugLog=1. For
 loot storing, attach MasterLooter.log too; with DebugLog=1 every item moved
 or left in the bag is in PrivateStorageMaster.log with the reason.
 

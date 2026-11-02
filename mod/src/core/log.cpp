@@ -66,24 +66,34 @@ namespace psm::Log
         }
     }
 
-    // Keep the last dozen sessions instead of one. The whole point of this
-    // plugin is the log it leaves, and a probe run is usually worth comparing
-    // against the one before it: the town flight and the mountain flight are
-    // two sessions, not one. Lifted from Master Looter, where a launch that
-    // destroyed the previous log cost a capture that had answered something.
+    // Keep the last five sessions as well as the live one. A report needs the
+    // live log and .01, and a probe run is usually worth comparing against the
+    // one before it. Lifted from Master Looter, where a launch that destroyed
+    // the previous log cost a capture that had answered something.
+    //
+    // Builds before November 2026 kept 24, and players noticed the pile in
+    // bin64. rspn670 asked on Nexus why the mod makes countless .log files, and
+    // sh3riff counted 77. Rotate deletes .06 up to .24 as it goes, so a folder
+    // an older build filled is down to five on the first launch.
     //
     // Plain text, not compressed. These get pasted into a message, and an
     // archive is a barrier to that.
-    static constexpr int kArchives = 24;   // plus the live one. Sessions are cheap; losing one is not.
+    static constexpr int kArchives = 5;      // plus the live one
+    static constexpr int kOldArchives = 24;  // the most any earlier build kept
 
     static void Rotate(const wchar_t* base)
     {
         wchar_t from[96], to[96], live[96];
         _snwprintf_s(live, _countof(live), _TRUNCATE, L"%s.log", base);
         // Oldest out first, then each one shuffles up a place, so the numbers
-        // read as age: 01 is the session before this one, 11 the furthest back.
-        _snwprintf_s(to, _countof(to), _TRUNCATE, L"%s.%02d.log", base, kArchives);
-        DeleteFileW(Paths::File(to).c_str());
+        // read as age: 01 is the session before this one, 05 the furthest back.
+        // Everything past the oldest kept one goes, back to the 24 that earlier
+        // builds kept.
+        for (int i = kOldArchives; i >= kArchives; --i)
+        {
+            _snwprintf_s(to, _countof(to), _TRUNCATE, L"%s.%02d.log", base, i);
+            DeleteFileW(Paths::File(to).c_str());
+        }
         for (int i = kArchives - 1; i >= 1; --i)
         {
             _snwprintf_s(from, _countof(from), _TRUNCATE, L"%s.%02d.log", base, i);
@@ -97,7 +107,7 @@ namespace psm::Log
     void Prune(const wchar_t* base, int keep)
     {
         wchar_t name[96];
-        for (int i = keep + 1; i <= kArchives; ++i)
+        for (int i = keep + 1; i <= kOldArchives; ++i)
         {
             _snwprintf_s(name, _countof(name), _TRUNCATE, L"%s.%02d.log", base, i);
             DeleteFileW(Paths::File(name).c_str());
