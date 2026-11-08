@@ -91,10 +91,17 @@ namespace psm::addr
         // storage keys went off (majahkil, 2.04.03). A slot that points at
         // executable code anywhere is still a slot. The table ends at the next
         // vtable's locator in .rdata, which is not executable.
+        //
+        // A mod that swaps the handler's own slot leaves the walk with nothing
+        // that has the shape, so the handler is then looked up by its opening
+        // instructions, which match once in the image on 3392, 3549 and 3576. The
+        // inline hook goes on the game's function and sees every packet the other
+        // mod passes on. One that swallows them all shows up as "never received
+        // the open" in the log.
         uintptr_t WarehouseHandler(uintptr_t vt)
         {
             uintptr_t found = 0;
-            int matches = 0, slots = 0, which = -1;
+            int matches = 0, slots = 0, which = -1, foreign = 0;
             for (; slots < 512; ++slots)
             {
                 uintptr_t fn = 0;
@@ -102,6 +109,7 @@ namespace psm::addr
                 if (!mem::InImage(fn))
                 {
                     LOG_NOTE("[addr] Warehouse2 slot %d points outside the game at %p, another mod's hook", slots, reinterpret_cast<void*>(fn));
+                    ++foreign;
                     continue;
                 }
                 for (size_t i = 0; i + 6 <= 0x60; ++i)
@@ -110,6 +118,19 @@ namespace psm::addr
                     if (FindWithin(fn + i + 3, 0x60 - i - 3, "80 3B 15") && !matches++) { found = fn; which = slots; }
                     break;
                 }
+            }
+            if (matches == 0 && foreign > 0)
+            {
+                size_t hits = 0;
+                const uintptr_t body = mem::FindUnique("49 8B D9 4C 8B F1 E8 ?? ?? ?? ?? 80 3B 15", &hits);
+                const uintptr_t entry = body ? FunctionEntry(body) : 0;
+                if (entry)
+                {
+                    LOG_NOTE("[addr] warehouse command handler's slot belongs to another mod, found it by its code at +%llX", R(entry));
+                    return entry;
+                }
+                LOG_ERR("[addr] Warehouse2: another mod has the handler's slot and its code matched %zu places, expected one", hits);
+                return 0;
             }
             if (matches != 1)
             {

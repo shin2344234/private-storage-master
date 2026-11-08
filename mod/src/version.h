@@ -8,7 +8,8 @@
 // (1.0.0.2944) and 2.03.01 between. The source now targets the DLC build, exe
 // 1.0.0.3392 (Steam 26308950, 29 October 2026), and no longer resolves on
 // those. 1.0.0.3424 (Steam 26317560) came out the next morning and every
-// anchor, the free-play screen and the slot cap check out on it unchanged. The
+// anchor, the free-play screen and the slot cap check out on it unchanged, and
+// the same holds through 1.0.0.3576 (2.04.08, 6 November 2026). The
 // string is the exe versions until the patch's own name is confirmed. It has to fit
 // PsmStatus::gameVersion, which is char[16] and part of the shipped API, so keep
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from

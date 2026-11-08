@@ -3,7 +3,7 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3460 (2.04.03).
+the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3576 (2.04.08).
 For 2.02.00 to 2.03.02, use 1.1.7.
 
 New in 1.1.9: the storage keys work alongside Camp Funds Withdraw. That mod

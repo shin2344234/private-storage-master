@@ -1,4 +1,4 @@
-Private Storage Master 1.1.9 for Crimson Desert 1.0.0.3392 to 1.0.0.3460
+Private Storage Master 1.1.10 for Crimson Desert 1.0.0.3392 to 1.0.0.3576
 ========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -8,7 +8,7 @@ Looter puts your loot straight into storage.
 Install
 -------
 
-1.1.9 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3460. On 2.02.00
+1.1.10 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3576. On 2.02.00
 to 2.03.02, use 1.1.7, which stays on the Files tab. Your ini carries over
 either way.
 
@@ -156,7 +156,9 @@ The housing chests (Gatherables Chest, Wardrobe, Kuku Cooler) are 10 slots in th
 game's data, and the game adds the slots of the furniture you have placed on
 top of that itself. A size of 0 leaves that to the game, and the mod does not
 work the sum out. A report on 1.1.6 saw the furniture's slots when a chest was
-opened inside the house and only 10 when it was opened from elsewhere. A size
+opened inside the house and only 10 when it was opened from elsewhere. The log
+notes a chest's count each time it changes, so one visit and one trip away
+show what your chests do. A size
 above 10 for a chest gives it that many slots wherever you open it.
 
 With Master Looter installed, its menu has a Storage tab for all of this,

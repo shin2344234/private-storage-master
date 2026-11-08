@@ -211,6 +211,31 @@ namespace psm::capacity
             return false;
         }
 
+        // Placed furniture adds slots to a housing chest through the game's own
+        // AddExpand, and nothing saves the sum, so whether it survives leaving the
+        // house is unknown (Helixis, bug 1145994). One line whenever a chest's
+        // numbers change answers that from any ordinary session, with no key to
+        // press. It reads and never writes.
+        void WatchFurnitureSlots()
+        {
+            static ULONGLONG s_next = 0;
+            static int s_cap[3] = {-1, -1, -1}, s_requested[3] = {-1, -1, -1};
+            const ULONGLONG now = GetTickCount64();
+            if (now < s_next) return;
+            s_next = now + 1000;
+            for (int i = 0; i < 3; ++i)
+            {
+                const Target& t = g_targets[i + 1];
+                Bucket b{};
+                if (!FindBucket(t.name, b)) continue;
+                if (b.cap == s_cap[i] && b.requested == s_requested[i]) continue;
+                LOG_NOTE("[capacity] %s is %d slots, %d added by furniture or buffs (was %d and %d), its setting %s", t.name, b.cap, b.requested,
+                         s_cap[i], s_requested[i], t.wanted ? "fixes the size" : "is 0");
+                s_cap[i] = b.cap;
+                s_requested[i] = b.requested;
+            }
+        }
+
         void Dump()
         {
             uint32_t n = 0;
@@ -492,6 +517,7 @@ namespace psm::capacity
     {
         static ULONGLONG s_next = 0;
         static int s_trims = 0;
+        WatchFurnitureSlots();
         const Target& t = g_targets[0];
         if (!g_hooked.load() || !t.wanted || t.patches.load() == 0) return;
         const ULONGLONG now = GetTickCount64();
