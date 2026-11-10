@@ -76,8 +76,13 @@ endif()
 # few lines a second while a key is held, and the version reads -diag<N>.
 option(PSM_DIAG "Diagnostic build with extended logging" OFF)
 set(PSM_DIAG_TAG "-diag1" CACHE STRING "Version suffix of a diagnostic build")
+# A plain test build's suffix, such as -test1: the plugin as it ships, but its
+# log and PsmStatus say it is a test build (version.h, PSM_VERSION_FULL).
+set(PSM_BUILD_TAG "" CACHE STRING "Version suffix of a test build, such as -test1; empty for a release")
 if(PSM_DIAG)
     target_compile_definitions(PrivateStorageMaster PRIVATE PSM_DIAG "PSM_BUILD_TAG=\"${PSM_DIAG_TAG}\"")
+elseif(PSM_BUILD_TAG)
+    target_compile_definitions(PrivateStorageMaster PRIVATE "PSM_BUILD_TAG=\"${PSM_BUILD_TAG}\"")
 endif()
 # GetFileVersionInfo (the game exe's version in diag.cpp). Linked in every
 # build so the two builds differ only in what the preprocessor keeps.
