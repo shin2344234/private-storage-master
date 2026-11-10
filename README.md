@@ -74,11 +74,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.10:
+SHA-256 for 1.1.11:
 
-    ff9a908aa2933b47dd607b16df5caedb7f5c2cfb4a7ba0c14d57e38195d2262c  PrivateStorageMaster-1.1.10-DMM.zip
-    9775cfd1642a666cfb3489f04435a25f4d645d3551ea23c8905d619409e65711  PrivateStorageMaster-1.1.10.zip
-    fcef4787b4f411d0157cd4e5689513a9998124a49a750bd3f3389f4b75c53e92  PrivateStorageMaster.asi
+    e1b9d03bd93da074f93413330f8a62a932e66b6f6b0d84335058ed3cb0b386f4  PrivateStorageMaster-1.1.11-DMM.zip
+    f2b256a189d225ebc2da13a8d051f06ae6369e46f3aed900f18e678de810f3fa  PrivateStorageMaster-1.1.11.zip
+    883073b1c3702c7f23678f0e8a4dda30ef9afabf8eb73eaf26ad7695e375ca1b  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

@@ -1,4 +1,4 @@
-Private Storage Master 1.1.10 for Crimson Desert 1.0.0.3392 to 1.0.0.3576
+Private Storage Master 1.1.11 for Crimson Desert 1.0.0.3392 to 1.0.0.3576
 ========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -8,7 +8,7 @@ Looter puts your loot straight into storage.
 Install
 -------
 
-1.1.10 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3576. On 2.02.00
+1.1.11 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3576. On 2.02.00
 to 2.03.02, use 1.1.7, which stays on the Files tab. Your ini carries over
 either way.
 
