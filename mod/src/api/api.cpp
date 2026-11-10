@@ -6,7 +6,9 @@
 #include <Windows.h>
 #include <cstdio>
 #include <cstring>
+#include <intrin.h>   // _ReturnAddress, for the diagnostic PsmPauseInput caller
 
+#include "core/diag.h"
 #include "core/log.h"
 #include "core/settings.h"
 #include "storage/capacity.h"
@@ -23,8 +25,8 @@
 // cannot be widened, so fail the build instead.
 static_assert(sizeof PSM_GAME <= sizeof(PsmStatus::gameVersion),
               "PSM_GAME does not fit PsmStatus::gameVersion");
-static_assert(sizeof PSM_VERSION <= sizeof(PsmStatus::version),
-              "PSM_VERSION does not fit PsmStatus::version");
+static_assert(sizeof PSM_VERSION_FULL <= sizeof(PsmStatus::version),
+              "PSM_VERSION_FULL does not fit PsmStatus::version");
 
 namespace
 {
@@ -83,7 +85,7 @@ PSM_EXPORT int PsmGetStatus(PsmStatus* out)
     out->imported = psm::Settings::Get().imported;
     out->restartNeeded = psm::Settings::RestartNeeded();
     out->learnedExpansions = psm::capacity::LearnedPrivateExtras();
-    snprintf(out->version, sizeof out->version, "%s", PSM_VERSION);
+    snprintf(out->version, sizeof out->version, "%s", PSM_VERSION_FULL);
     snprintf(out->gameVersion, sizeof out->gameVersion, "%s", PSM_GAME);
     psm::Log::LastError(out->lastError, sizeof out->lastError);
     return 1;
@@ -145,7 +147,14 @@ PSM_EXPORT int PsmFixedSlots(int storage)
     return storage >= 0 && storage < PSM_STORAGES ? psm::Settings::kFixedSlots[storage] : 0;
 }
 
-PSM_EXPORT void PsmPauseInput(uint32_t ms) { psm::storage::PauseInput(ms > 2000 ? 2000 : ms); }
+PSM_EXPORT void PsmPauseInput(uint32_t ms)
+{
+    // Diagnostic builds count every call with the module that made it, so a
+    // log can say which plugin is holding the storage keys. _ReturnAddress is
+    // the caller's code, since this export is called directly.
+    psm::diag::NotePause(_ReturnAddress(), ms);
+    psm::storage::PauseInput(ms > 2000 ? 2000 : ms);
+}
 
 PSM_EXPORT int PsmHidingKeys(void) { return psm::storage::HidingKeys() ? 1 : 0; }
 
@@ -305,7 +314,7 @@ STACK_EXPORT int StackGetStatus(StackStatus* out)
     fill->size = want;
     snprintf(fill->provider, sizeof fill->provider, "%s", PSM_NAME);
     snprintf(fill->providerModule, sizeof fill->providerModule, "%s", PSM_MODULE);
-    snprintf(fill->version, sizeof fill->version, "%s", PSM_VERSION);
+    snprintf(fill->version, sizeof fill->version, "%s", PSM_VERSION_FULL);
     snprintf(fill->gameVersion, sizeof fill->gameVersion, "%s", PSM_GAME);
     fill->applying = r.reason == psm::stacks::kApplying;
     fill->standDownReason = r.reason;

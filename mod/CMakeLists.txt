@@ -43,6 +43,7 @@ add_library(PrivateStorageMaster SHARED
     src/storage/inventory.cpp
     src/storage/deposit.cpp
     src/api/api.cpp
+    src/core/diag.cpp
     src/resources.rc
 )
 
@@ -64,6 +65,23 @@ option(PSM_DEPOSIT_TEST_KEY "Ctrl+F11 deposit test key" OFF)
 if(PSM_DEPOSIT_TEST_KEY)
     target_compile_definitions(PrivateStorageMaster PRIVATE PSM_DEPOSIT_TEST_KEY)
 endif()
+
+# Diagnostic build: every LOG line on whatever the ini says, plus the
+# core/diag.cpp probes (environment and module dump, foreground and focus
+# changes, every press of a bound or F key with the reason it was or was not
+# acted on, a heartbeat of the poller and frame tick, hook and window
+# procedure integrity, PsmPauseInput callers, a poller stall watchdog and
+# faults inside the plugin). Made for chasing "the keys do nothing" reports
+# that a normal log cannot explain. Never on in a release: the log grows by a
+# few lines a second while a key is held, and the version reads -diag<N>.
+option(PSM_DIAG "Diagnostic build with extended logging" OFF)
+set(PSM_DIAG_TAG "-diag1" CACHE STRING "Version suffix of a diagnostic build")
+if(PSM_DIAG)
+    target_compile_definitions(PrivateStorageMaster PRIVATE PSM_DIAG "PSM_BUILD_TAG=\"${PSM_DIAG_TAG}\"")
+endif()
+# GetFileVersionInfo (the game exe's version in diag.cpp). Linked in every
+# build so the two builds differ only in what the preprocessor keeps.
+target_link_libraries(PrivateStorageMaster PRIVATE version psapi)
 
 set_target_properties(PrivateStorageMaster PROPERTIES PREFIX "" SUFFIX ".asi" OUTPUT_NAME "PrivateStorageMaster")
 

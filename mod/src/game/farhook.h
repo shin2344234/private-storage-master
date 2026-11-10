@@ -14,4 +14,11 @@ namespace psm::farhook
     // original function). Returns false and fills `why` on failure.
     bool Install(const char* name, uintptr_t target, void* detour, void** original, char* why, unsigned whyLen);
     void RemoveAll();
+
+    // Diagnostic builds: compares every installed hook's entry bytes with the
+    // patch this module wrote, and logs each hook whose state changed since the
+    // last call: "intact", or what is there now (another mod's jump on top of
+    // ours, the original bytes restored, or something else). Returns how many
+    // are not intact. A no-op returning 0 in a normal build.
+    int DiagCheck(bool logAll);
 }

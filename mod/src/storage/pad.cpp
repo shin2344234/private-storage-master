@@ -3,8 +3,10 @@
 #include <Windows.h>
 #include <Xinput.h>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 
+#include "core/diag.h"
 #include "core/log.h"
 #include "core/settings.h"
 #include "game/mem.h"
@@ -166,6 +168,35 @@ namespace psm::pad
     }
 
     void HideBUntilReleased() { g_hideB = true; }
+
+    void DiagState(char* out, size_t cap)
+    {
+        if (!cap) return;
+        out[0] = 0;
+#ifdef PSM_DIAG
+        char from[160] = "none";
+        if (g_get) diag::ModuleOf(reinterpret_cast<const void*>(g_get), from, sizeof from);
+        // What sits in the game's XInputGetState import now. Ours, the game's
+        // original, or a third party's (another mod's filter installed later).
+        const char* slot = "not patched";
+        char other[160] = "";
+        if (g_slot)
+        {
+            uintptr_t cur = 0;
+            if (!mem::Read64(reinterpret_cast<uintptr_t>(g_slot), &cur)) slot = "unreadable";
+            else if (cur == reinterpret_cast<uintptr_t>(&FilteredGetState)) slot = "ours";
+            else if (cur == reinterpret_cast<uintptr_t>(g_gameGet)) slot = "the game's original again";
+            else
+            {
+                slot = "replaced by";
+                diag::ModuleOf(reinterpret_cast<const void*>(cur), other, sizeof other);
+            }
+        }
+        snprintf(out, cap, "pad: polling %s, import slot %s%s%s, pads in slots %s%s%s%s, buttons %04X", from, slot, other[0] ? " " : "",
+                 other, g_present[0] ? "0" : "-", g_present[1] ? "1" : "-", g_present[2] ? "2" : "-", g_present[3] ? "3" : "-",
+                 static_cast<unsigned>(g_last.load()));
+#endif
+    }
 
     void Shutdown()
     {

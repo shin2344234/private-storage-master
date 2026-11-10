@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 // Xbox controllers through XInput. The mod polls all four slots itself, so a pad
@@ -14,4 +15,9 @@ namespace psm::pad
     int Slot();        // first XInput slot with a pad, or -1
     void HideBUntilReleased();
     void Shutdown();
+    // Diagnostic builds: one line of state for the heartbeat. Which XInput DLL
+    // the mod polls, whether the game's import slot still holds our filter (a
+    // mod loaded later can put its own there), the pads present and the buttons
+    // last seen. Empty in a normal build.
+    void DiagState(char* out, size_t cap);
 }

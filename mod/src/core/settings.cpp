@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/diag.h"
 #include "core/log.h"
 #include "core/paths.h"
 #include "version.h"
@@ -586,7 +587,10 @@ namespace psm::Settings
         void Publish(const Values& v)
         {
             g_cur.store(new Values(v));
-            Log::SetDebug(v.debugLog);
+            // A diagnostic build logs everything whatever the ini says: the DMM
+            // update that this build chases deleted the ini once, and the default
+            // that came back had DebugLog=0, which hid the very lines it needed.
+            Log::SetDebug(v.debugLog || diag::kOn);
         }
 
         void LogValues(const Values& v)

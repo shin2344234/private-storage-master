@@ -2,6 +2,7 @@
 
 #include <atomic>
 
+#include "core/diag.h"
 #include "core/log.h"
 #include "core/paths.h"
 #include "core/settings.h"
@@ -25,8 +26,10 @@ namespace
         // DebugLog a session is a handful of lines, and the last two are all a
         // report needs, including the one before a crash and a relaunch.
         if (!psm::Log::Debug()) psm::Log::Prune(PSM_FILEBASE, 2);
-        LOG_NOTE("[mod] %s %s for Crimson Desert %s, game image at 0x%p, %zu bytes", PSM_NAME, PSM_VERSION, PSM_GAME,
+        LOG_NOTE("[mod] %s %s for Crimson Desert %s, game image at 0x%p, %zu bytes", PSM_NAME, PSM_VERSION_FULL, PSM_GAME,
                  reinterpret_cast<void*>(psm::mem::Game().base), psm::mem::Game().size);
+        // Diagnostic builds only: exe version, parent process, ini text, modules.
+        psm::diag::Startup();
         if (!psm::Settings::Get().enabled)
         {
             LOG_NOTE("[mod] Enabled=0, so the mod does nothing");

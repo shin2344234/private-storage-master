@@ -14,6 +14,16 @@
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from
 // PsmGetStatus as "2.02.00 and 2.0".
 #define PSM_GAME     "1.0.0.3392-3462"
+// What a test build calls itself, appended to PSM_VERSION wherever the version
+// is shown (the log's [mod] line and PsmStatus::version), so a log from a
+// diagnostic build can never be read as one from the release. It comes from
+// the build (CMake's PSM_DIAG option sets it to "-diag1"), never from editing
+// this file: the release scripts read PSM_VERSION above with a regex and must
+// keep seeing exactly the released number. Empty on anything that ships.
+#ifndef PSM_BUILD_TAG
+#define PSM_BUILD_TAG ""
+#endif
+#define PSM_VERSION_FULL PSM_VERSION PSM_BUILD_TAG
 // Base name of the plugin's files next to it: PrivateStorageMaster.asi, .ini, .log.
 #define PSM_FILEBASE L"PrivateStorageMaster"
 // The same as narrow text, for the module name another plugin looks us up by.

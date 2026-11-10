@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/diag.h"
 #include "core/log.h"
 #include "core/settings.h"
 #include "game/addresses.h"
@@ -150,6 +151,51 @@ namespace psm::storage
         std::atomic<DWORD> g_lastTick{0};
         std::atomic<bool>  g_hidingKeys{false};   // published by the poller for PsmHidingKeys
         bool Paused() { return static_cast<int32_t>(g_pauseUntil.load() - GetTickCount()) > 0; }
+
+#ifdef PSM_DIAG
+        // ------------------------------------------------------------ diagnostics
+        // Counters for the heartbeat. Written by the frame tick and the window
+        // procedure (game threads) and read and reset by the poller, so all are
+        // atomics, and an exchange(0) reads and resets in one go.
+        std::atomic<uint32_t> g_dTicks{0};       // frame ticks since the last heartbeat
+        std::atomic<int>      g_dMode{-1};       // phase manager mode byte on the last frame
+        std::atomic<int>      g_dScreen{-1};     // and its screen byte
+        std::atomic<uint32_t> g_dWndMsgs{0};     // messages through our window procedure
+        std::atomic<uint32_t> g_dWndKeys{0};     // WM_KEYDOWN/WM_SYSKEYDOWN among them
+        std::atomic<uint32_t> g_dWndInput{0};    // WM_INPUT among them (raw input)
+        std::atomic<uint32_t> g_dSwallowed{0};   // key messages our procedure kept from the game
+        std::atomic<DWORD>    g_dPollMax{0};     // slowest pad::Poll since the last heartbeat, ms
+        std::atomic<uint32_t> g_dLoops{0};       // poller iterations since the last heartbeat
+
+        // "Ctrl+Shift" for a kMod* mask, "none" for 0.
+        const char* ModsText(uint8_t m, char* out, size_t cap)
+        {
+            snprintf(out, cap, "%s%s%s%s", m & Settings::kModCtrl ? "Ctrl+" : "", m & Settings::kModShift ? "Shift+" : "",
+                     m & Settings::kModAlt ? "Alt+" : "", m ? "" : "none");
+            const size_t l = strlen(out);
+            if (l && out[l - 1] == '+') out[l - 1] = 0;
+            return out;
+        }
+
+        // The keys the diagnostic watches: every function key, the number pad
+        // in both its NumLock states, and anything a binding uses. Ctrl+F1 to
+        // Ctrl+F9 are the defaults, and the reporter had been on Ctrl+Numpad.
+        bool DiagWatched(uint8_t vk)
+        {
+            if (vk >= VK_F1 && vk <= VK_F12) return true;
+            if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return true;
+            switch (vk)
+            {
+            case VK_END: case VK_DOWN: case VK_NEXT: case VK_LEFT: case VK_CLEAR: case VK_RIGHT: case VK_HOME: case VK_UP:
+            case VK_PRIOR: case VK_INSERT: case VK_DELETE: return true;
+            default: break;
+            }
+            const Settings::Values& v = Settings::Get();
+            for (int i = 0; i < Settings::kStorages; ++i)
+                if (v.key[i].vk == vk) return true;
+            return v.dumpKey.vk == vk || v.hideKeysToggleKey.vk == vk;
+        }
+#endif
 
         void* oHandler = nullptr, *oModeSwitch = nullptr, *oStageClose = nullptr, *oInputBlock = nullptr;
 
@@ -389,6 +435,20 @@ namespace psm::storage
             if (g_closeRequested.exchange(false) && g_open.load()) Close(pm, "Esc or B");
 
             g_freePlay = mode == 4 && screen == kScreenIngame;
+#ifdef PSM_DIAG
+            // The first frame is a note, every change of play mode or screen a
+            // line: "no key works" with no frame ever reaching here is a hook
+            // problem, with frames stuck in a mode other than 4 a gate problem.
+            if (!g_lastTick.load())
+                LOG_NOTE("[diag] first frame tick reached the mod: mode %u, screen 0x%02X (free play is mode 4, screen 0x%02X)", mode, screen,
+                         kScreenIngame);
+            ++g_dTicks;
+            const int lastMode = g_dMode.exchange(mode), lastScreen = g_dScreen.exchange(screen);
+            if (lastMode != mode || lastScreen != screen)
+                LOG("[diag] frame: mode %d -> %u, screen 0x%02X -> 0x%02X, free play %s", lastMode, mode, lastScreen & 0xFF, screen,
+                    g_freePlay.load() ? "yes" : "no");
+            if (act >= 0) LOG("[diag] frame picked up the key request for %s", act < Settings::kStorages ? kChests[act].label : "?");
+#endif
             g_lastTick = GetTickCount();
             // Loot moves only in free play, with no storage open or about to open,
             // so a deposit never races the warehouse screen.
@@ -604,8 +664,57 @@ namespace psm::storage
             return DefWindowProcW(h, m, w, l);   // not a window we took; never reached, but never call through nothing
         }
 
+#ifdef PSM_DIAG
+        // Everything about a message worth knowing for "the keys do nothing":
+        // whether key messages reach the game window at all, which ones, with
+        // what modifiers, and when the window gains or loses focus.
+        void DiagWndMsg(HWND h, UINT m, WPARAM w, LPARAM l)
+        {
+            ++g_dWndMsgs;
+            char cls[32] = {};
+            switch (m)
+            {
+            case WM_INPUT: ++g_dWndInput; return;
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+            {
+                ++g_dWndKeys;
+                const uint8_t vk = static_cast<uint8_t>(w & 0xFF);
+                // Auto-repeat (bit 30) is the same press again; one line per press.
+                if ((l & 0x40000000) || !DiagWatched(vk)) return;
+                const uint8_t mods = HeldMods();
+                char mt[32], kt[32];
+                Settings::KeyBind k{vk, 0};
+                Settings::KeyText(k, kt, sizeof kt);
+                GetClassNameA(h, cls, sizeof cls);
+                LOG("[diag] window %s got %s %s (scan %02lX%s) with %s held, binding %d, %s", cls, m == WM_SYSKEYDOWN ? "WM_SYSKEYDOWN" : "WM_KEYDOWN",
+                    kt, (l >> 16) & 0xFF, (l & 0x01000000) ? " extended" : "", ModsText(mods, mt, sizeof mt), Binding(vk, mods),
+                    Paused() ? "while paused" : "not paused");
+                return;
+            }
+            case WM_ACTIVATEAPP:
+                GetClassNameA(h, cls, sizeof cls);
+                LOG("[diag] window %s: WM_ACTIVATEAPP %s (other thread %lu)", cls, w ? "activated" : "deactivated", static_cast<unsigned long>(l));
+                return;
+            case WM_ACTIVATE:
+                GetClassNameA(h, cls, sizeof cls);
+                LOG("[diag] window %s: WM_ACTIVATE %s", cls, LOWORD(w) == WA_INACTIVE ? "inactive" : LOWORD(w) == WA_CLICKACTIVE ? "click-active" : "active");
+                return;
+            case WM_SETFOCUS:
+            case WM_KILLFOCUS:
+                GetClassNameA(h, cls, sizeof cls);
+                LOG("[diag] window %s: %s (other window %p)", cls, m == WM_SETFOCUS ? "WM_SETFOCUS" : "WM_KILLFOCUS", reinterpret_cast<void*>(w));
+                return;
+            default: return;
+            }
+        }
+#endif
+
         LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         {
+#ifdef PSM_DIAG
+            DiagWndMsg(h, m, w, l);
+#endif
             if ((m == WM_KEYDOWN || m == WM_SYSKEYDOWN) && !Paused())
             {
                 const uint8_t vk = static_cast<uint8_t>(w & 0xFF);
@@ -619,6 +728,9 @@ namespace psm::storage
                     // probe 2 did, so a message that never reaches this window still works.
                     g_swallowed[vk] = true;
                     g_eatChar = true;
+#ifdef PSM_DIAG
+                    ++g_dSwallowed;
+#endif
                     return 0;
                 }
             }
@@ -738,8 +850,181 @@ namespace psm::storage
                      saved ? "" : ", but it was not saved: ", saved ? "" : why);
         }
 
+#ifdef PSM_DIAG
+        // The poller's half of the diagnostics, once per iteration. Reads the
+        // keyboard itself, whether or not the game is in front, so a press the
+        // poller would ignore still gets a line saying why it was ignored.
+        struct DiagPollState
+        {
+            HWND fg = reinterpret_cast<HWND>(-1);   // last foreground window seen
+            HWND guiFocus = reinterpret_cast<HWND>(-1), guiActive = reinterpret_cast<HWND>(-1);
+            bool keyWas[256] = {};
+            DWORD nextBeat = 0;
+            DWORD started = 0;
+            int beats = 0;
+            UINT rawCount = 0xFFFFFFFF;
+            RAWINPUTDEVICE raw[16] = {};
+            bool firstHooks = true;
+        };
+
+        void DiagHeartbeat(DiagPollState& d, DWORD now, bool front, bool paused, uint8_t mods)
+        {
+            char mt[32], pads[256], pauses[512];
+            const DWORD last = g_lastTick.load();
+            const int32_t pauseLeft = static_cast<int32_t>(g_pauseUntil.load() - now);
+            const int open = g_open.load() ? g_openChest.load() : -1;
+            const int pending = g_pending.load();
+            LOG("[diag] heartbeat %d: game in front %s, paused %s%ld ms, mods %s, %u frames since the last beat, last frame %ld ms ago, "
+                "mode %d screen 0x%02X, free play %s, open %s, pending %s, poller loops %u, slowest pad poll %lu ms, hiding keys %s",
+                ++d.beats, front ? "yes" : "NO", paused ? "YES " : "no, ", paused ? static_cast<long>(pauseLeft) : 0L, ModsText(mods, mt, sizeof mt),
+                g_dTicks.exchange(0), last ? static_cast<long>(now - last) : -1L, g_dMode.load(), g_dScreen.load() & 0xFF,
+                g_freePlay.load() ? "yes" : "no", open >= 0 ? kChests[open].label : "none",
+                pending >= 0 && pending < Settings::kStorages ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
+                g_hidingKeys.load() ? "yes" : "no");
+            LOG("[diag] heartbeat %d: window procedure saw %u messages, %u key downs, %u WM_INPUT, kept %u key messages from the game; %ld faults logged",
+                d.beats, g_dWndMsgs.exchange(0), g_dWndKeys.exchange(0), g_dWndInput.exchange(0), g_dSwallowed.exchange(0), diag::FaultsLogged());
+
+            // Our window procedures: still in place, or did someone go on top
+            // (fine, they chain to us) or replace us outright (not fine).
+            const int n = g_windowCount.load(std::memory_order_acquire);
+            for (int i = 0; i < n; ++i)
+            {
+                const HookedWindow& e = g_windows[i];
+                if (!IsWindow(e.hwnd)) { LOG("[diag] heartbeat %d: window %p is gone", d.beats, static_cast<void*>(e.hwnd)); continue; }
+                const LONG_PTR cur = e.unicode ? GetWindowLongPtrW(e.hwnd, GWLP_WNDPROC) : GetWindowLongPtrA(e.hwnd, GWLP_WNDPROC);
+                char cls[32] = {}, who[160] = "ours";
+                GetClassNameA(e.hwnd, cls, sizeof cls);
+                if (cur != reinterpret_cast<LONG_PTR>(WndProc)) diag::ModuleOf(reinterpret_cast<const void*>(cur), who, sizeof who);
+                LOG("[diag] heartbeat %d: window %s %p %s, procedure %s", d.beats, cls, static_cast<void*>(e.hwnd),
+                    IsWindowVisible(e.hwnd) ? "visible" : "hidden", who);
+            }
+
+            // Focus inside the game's GUI thread: which of its windows has the
+            // keyboard. Logged when it changes.
+            if (n)
+            {
+                GUITHREADINFO gti{};
+                gti.cbSize = sizeof gti;
+                const DWORD tid = GetWindowThreadProcessId(g_windows[0].hwnd, nullptr);
+                if (GetGUIThreadInfo(tid, &gti) && (gti.hwndFocus != d.guiFocus || gti.hwndActive != d.guiActive))
+                {
+                    d.guiFocus = gti.hwndFocus;
+                    d.guiActive = gti.hwndActive;
+                    char f[400], a[400];
+                    diag::DescribeWindow(gti.hwndFocus, f, sizeof f);
+                    diag::DescribeWindow(gti.hwndActive, a, sizeof a);
+                    LOG("[diag] game GUI thread %lu: keyboard focus %s; active %s", tid, f, a);
+                }
+            }
+
+            // Raw input the process registered. A keyboard registered with
+            // RIDEV_NOLEGACY (flag 0x30) gets no WM_KEYDOWN at all.
+            UINT count = 16;
+            RAWINPUTDEVICE raw[16] = {};
+            const UINT got = GetRegisteredRawInputDevices(raw, &count, sizeof(RAWINPUTDEVICE));
+            if (got != static_cast<UINT>(-1) && (got != d.rawCount || memcmp(raw, d.raw, sizeof(RAWINPUTDEVICE) * got) != 0))
+            {
+                d.rawCount = got;
+                memcpy(d.raw, raw, sizeof raw);
+                LOG("[diag] raw input registered by this thread's process: %u device(s)", got);
+                for (UINT i = 0; i < got; ++i)
+                    LOG("[diag]   usage page %02X usage %02X (%s), flags %08lX%s, target %p", raw[i].usUsagePage, raw[i].usUsage,
+                        raw[i].usUsagePage == 1 && raw[i].usUsage == 6 ? "keyboard" : raw[i].usUsagePage == 1 && raw[i].usUsage == 2 ? "mouse" : "other",
+                        raw[i].dwFlags, (raw[i].dwFlags & RIDEV_NOLEGACY) ? " NOLEGACY: no key messages" : "", static_cast<void*>(raw[i].hwndTarget));
+            }
+
+            pad::DiagState(pads, sizeof pads);
+            LOG("[diag] heartbeat %d: %s", d.beats, pads);
+            diag::TakePauses(pauses, sizeof pauses);
+            if (pauses[0]) LOG("[diag] heartbeat %d: %s", d.beats, pauses);
+
+            // Hooks: every one listed on the first beat, then only changes.
+            farhook::DiagCheck(d.firstHooks);
+            d.firstHooks = false;
+            diag::WatchModules();
+        }
+
+        void DiagPoll(DiagPollState& d, DWORD now, bool front, bool paused, uint8_t polledMods)
+        {
+            if (!d.started) d.started = now;
+
+            // Foreground changes, with the window's process. "Game in front: NO"
+            // in a heartbeat says the keys are ignored; this says who has them.
+            const HWND fg = GetForegroundWindow();
+            if (fg != d.fg)
+            {
+                d.fg = fg;
+                char desc[400];
+                diag::DescribeWindow(fg, desc, sizeof desc);
+                LOG("[diag] foreground window is now %s", desc);
+            }
+
+            // Every watched key's press, read straight from the keyboard state
+            // with the modifiers held at that moment, and what the poller does
+            // with it. The modifiers are read here too, not taken from the
+            // poller, which reads none while the game is not in front.
+            uint8_t mods = 0;
+            if (GetAsyncKeyState(VK_CONTROL) & 0x8000) mods |= Settings::kModCtrl;
+            if (GetAsyncKeyState(VK_SHIFT) & 0x8000) mods |= Settings::kModShift;
+            if (GetAsyncKeyState(VK_MENU) & 0x8000) mods |= Settings::kModAlt;
+            for (int vk = 1; vk < 256; ++vk)
+            {
+                if (vk == VK_CONTROL || vk == VK_SHIFT || vk == VK_MENU || !DiagWatched(static_cast<uint8_t>(vk))) continue;
+                const bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                if (down && !d.keyWas[vk])
+                {
+                    char kt[32], mt[32], why[200];
+                    Settings::KeyBind k{static_cast<uint8_t>(vk), 0};
+                    Settings::KeyText(k, kt, sizeof kt);
+                    const int b = Binding(static_cast<uint8_t>(vk), mods);
+                    if (!front) snprintf(why, sizeof why, "IGNORED: the game is not the foreground window");
+                    else if (paused)
+                        snprintf(why, sizeof why, "IGNORED: PsmPauseInput holds the keys for %ld ms more",
+                                 static_cast<long>(static_cast<int32_t>(g_pauseUntil.load() - now)));
+                    else if (b >= 0) snprintf(why, sizeof why, "acted on: opens or closes %s", kChests[b].label);
+                    else if (b == -2) snprintf(why, sizeof why, "acted on: the capacity dump key");
+                    else if (b == -3) snprintf(why, sizeof why, "acted on: the HideKeysWithModifier toggle");
+                    else
+                    {
+                        // Bound with other modifiers? Then say which, since a
+                        // stuck or missing Ctrl is a cause of its own.
+                        const Settings::Values& v = Settings::Get();
+                        int other = -1;
+                        for (int i = 0; i < Settings::kStorages && other < 0; ++i)
+                            if (v.key[i].vk == vk) other = i;
+                        if (other >= 0)
+                        {
+                            char want[32];
+                            snprintf(why, sizeof why, "not acted on: %s is bound with %s, and %s is held", kChests[other].label,
+                                     ModsText(v.key[other].mods, want, sizeof want), ModsText(mods, mt, sizeof mt));
+                        }
+                        else snprintf(why, sizeof why, "not bound with these modifiers");
+                    }
+                    // The poller's own modifier read is shown beside ours: it
+                    // reads none while the game is not in front, so a gap
+                    // between the two is expected then and a clue otherwise.
+                    char pt[32];
+                    LOG("[diag] key %s pressed with %s held (poller read %s): %s", kt, ModsText(mods, mt, sizeof mt),
+                        ModsText(polledMods, pt, sizeof pt), why);
+                }
+                d.keyWas[vk] = down;
+            }
+
+            // A beat every 5 s for the first two minutes, then every 15 s.
+            if (now >= d.nextBeat)
+            {
+                DiagHeartbeat(d, now, front, paused, mods);
+                d.nextBeat = now + (now - d.started < 120000 ? 5000 : 15000);
+            }
+        }
+#endif
+
         DWORD WINAPI Poller(LPVOID)
         {
+#ifdef PSM_DIAG
+            DiagPollState diagState;
+            LOG_NOTE("[diag] key poller thread %lu started", GetCurrentThreadId());
+#endif
             bool was[Settings::kStorages] = {};
             bool keyWas[Settings::kStorages + 2] = {};   // the storages, then the dump key, then the block toggle
             DWORD since[Settings::kStorages] = {};
@@ -757,10 +1042,15 @@ namespace psm::storage
             bool sawKey = false, saidNoTick = false;
             while (!g_stop.load())
             {
+                diag::Beat("Sleep");
                 Sleep(16);
                 const DWORD now = GetTickCount();
+#ifdef PSM_DIAG
+                ++g_dLoops;
+#endif
                 if (now >= nextWindowCheck)
                 {
+                    diag::Beat("finding the game windows");
                     const int showing = SubclassGameWindows();
                     if (!showing && !saidMissing && now - pollStart > 60000)
                     {
@@ -783,9 +1073,21 @@ namespace psm::storage
                     saidNoTick = true;
                 }
 
+                diag::Beat("reading the foreground window");
                 const bool front = GameInFront();
                 const bool paused = Paused();
+                diag::Beat("pad::Poll (XInputGetState)");
+#ifdef PSM_DIAG
+                const DWORD padStart = GetTickCount();
+#endif
                 const uint16_t buttons = front ? pad::Poll() : 0;
+#ifdef PSM_DIAG
+                {
+                    const DWORD took = GetTickCount() - padStart;
+                    if (took > g_dPollMax.load()) g_dPollMax = took;
+                }
+#endif
+                diag::Beat("reading the keyboard");
                 const Settings::Values& v = Settings::Get();
 
                 uint8_t mods = 0;
@@ -796,6 +1098,11 @@ namespace psm::storage
                     if (KeyDown(VK_MENU)) mods |= Settings::kModAlt;
                 }
                 g_hidingKeys.store(v.hideKeysWithModifier && ModsInUse(mods), std::memory_order_relaxed);
+#ifdef PSM_DIAG
+                diag::Beat("diagnostics");
+                DiagPoll(diagState, now, front, paused, mods);
+                diag::Beat("reading the keyboard");
+#endif
                 for (int i = 0; i <= Settings::kStorages + 1; ++i)
                 {
                     const Settings::KeyBind& k = i < Settings::kStorages ? v.key[i] : i == Settings::kStorages ? v.dumpKey : v.hideKeysToggleKey;
@@ -848,6 +1155,9 @@ namespace psm::storage
                 }
             }
             g_hidingKeys = false;
+#ifdef PSM_DIAG
+            LOG_NOTE("[diag] key poller thread stopping");
+#endif
             return 0;
         }
 
@@ -900,7 +1210,13 @@ namespace psm::storage
             return false;
         }
         pad::Init();
-        g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, nullptr);
+        DWORD pollerTid = 0;
+        g_poller = CreateThread(nullptr, 0, Poller, nullptr, 0, &pollerTid);
+        if (!g_poller) LOG_ERR("[storage] the key poller thread could not start (%lu); no key or combo will work", GetLastError());
+        // Diagnostic builds: faults in the plugin or on the poller thread, and
+        // a watchdog that says when the poller stops making progress.
+        diag::InstallFaultLogger(pollerTid);
+        diag::StartWatchdog();
         g_ready = true;
         return true;
     }
@@ -934,6 +1250,8 @@ namespace psm::storage
             CloseHandle(g_poller);
             g_poller = nullptr;
         }
+        diag::StopWatchdog();
+        diag::RemoveFaultLogger();
         RestoreGameWindows();
         pad::Shutdown();
     }

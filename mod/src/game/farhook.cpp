@@ -1,5 +1,6 @@
 #include "game/farhook.h"
 
+#include "core/log.h"
 #include "game/mem.h"
 
 #include <Windows.h>
@@ -13,7 +14,9 @@ extern "C" {
 
 namespace psm::farhook
 {
-    struct Entry { uintptr_t target; unsigned stolen; unsigned char orig[32]; };
+    // name and patch are kept for DiagCheck: the name is a literal from the
+    // caller, the patch the bytes this module wrote over the entry.
+    struct Entry { uintptr_t target; unsigned stolen; unsigned char orig[32]; unsigned char patch[32]; const char* name; int state; };
     static Entry g_entries[96];
     static int   g_n = 0;
     static unsigned char* g_page = nullptr;
@@ -126,7 +129,6 @@ namespace psm::farhook
 
     bool Install(const char* name, uintptr_t target, void* detour, void** original, char* why, unsigned whyLen)
     {
-        (void)name;
         why[0] = 0;
         if (!target) { snprintf(why, whyLen, "no target"); return false; }
         if (g_n >= static_cast<int>(sizeof g_entries / sizeof g_entries[0]))
@@ -175,6 +177,9 @@ namespace psm::farhook
         Entry& e = g_entries[g_n];
         e.target = target; e.stolen = stolen;
         memcpy(e.orig, reinterpret_cast<const void*>(target), stolen);
+        memcpy(e.patch, patch, sizeof patch);
+        e.name = name ? name : "?";
+        e.state = 0;   // intact, as far as DiagCheck knows
 
         // Publish the trampoline before the entry patch, never after.
         //
@@ -193,6 +198,55 @@ namespace psm::farhook
         if (!WriteCode(target, patch, stolen, why, whyLen)) { *original = nullptr; return false; }
         ++g_n;
         return true;
+    }
+
+    int DiagCheck(bool logAll)
+    {
+#ifdef PSM_DIAG
+        int broken = 0;
+        for (int i = 0; i < g_n; ++i)
+        {
+            Entry& e = g_entries[i];
+            unsigned char now[32] = {};
+            const bool read = psm::mem::ReadBytes(e.target, now, e.stolen);
+            // 0 intact, 1 our patch replaced by something, 2 original bytes back,
+            // 3 unreadable. Only the first 12 bytes are ours to compare: the rest
+            // of the stolen span is int3 padding nobody else would care about.
+            int state = !read ? 3 : memcmp(now, e.patch, 12) == 0 ? 0 : memcmp(now, e.orig, e.stolen) == 0 ? 2 : 1;
+            if (state) ++broken;
+            if (state == e.state && !logAll) continue;
+            e.state = state;
+            char hex[3 * 16 + 1] = {};
+            for (unsigned k = 0; k < 16 && k < e.stolen; ++k) snprintf(hex + 3 * k, 4, "%02X ", now[k]);
+            // What a replaced entry jumps to: E9 rel32, or FF 25 [rip] abs64, or
+            // our own mov rax / jmp rax shape with someone else's address.
+            uintptr_t dest = 0;
+            if (state == 1)
+            {
+                if (now[0] == 0xE9) dest = e.target + 5 + *reinterpret_cast<int32_t*>(now + 1);
+                else if (now[0] == 0xFF && now[1] == 0x25) psm::mem::Read64(e.target + 6 + *reinterpret_cast<int32_t*>(now + 2), &dest);
+                else if (now[0] == 0x48 && now[1] == 0xB8) memcpy(&dest, now + 2, 8);
+            }
+            char mod[160] = "";
+            if (dest)
+            {
+                HMODULE m = nullptr;
+                wchar_t p[MAX_PATH] = L"";
+                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       reinterpret_cast<LPCWSTR>(dest), &m) && m)
+                    GetModuleFileNameW(m, p, MAX_PATH);
+                snprintf(mod, sizeof mod, ", now jumps to %p in %ls", reinterpret_cast<void*>(dest), p[0] ? p : L"no module (a trampoline)");
+            }
+            static const char* const kState[] = {"intact", "OVERWRITTEN by something else", "REMOVED (the original bytes are back)",
+                                                 "unreadable"};
+            ::psm::Log::Write(state ? "error" : "note ", "[diag] hook %s at %p: %s; entry bytes %s%s", e.name,
+                              reinterpret_cast<void*>(e.target), kState[state], hex, mod);
+        }
+        return broken;
+#else
+        (void)logAll;
+        return 0;
+#endif
     }
 
     void RemoveAll()
