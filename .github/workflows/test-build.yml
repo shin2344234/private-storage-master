@@ -1,6 +1,7 @@
 # Test and diagnostic builds, published as GitHub prereleases.
 #
-# Push a tag named v<version>-test<N> or v<version>-diag<N> and this builds the
+# Push a tag named v<version>-test<N> or v<version>-diag<N>, or run it by hand
+# (workflow_dispatch) on a branch with that tag name as input, and this builds the
 # plugin with MSVC on a Windows runner, packages the same two archives
 # mod/scripts/package.ps1 makes (the full zip and the DMM zip), and publishes a
 # prerelease for the tag with the notes in docs/test-builds/<tag>.md.
@@ -17,6 +18,14 @@ on:
     tags:
       - "v*-test*"
       - "v*-diag*"
+  # By hand, for when a tag cannot be pushed (the cloud session that cut
+  # 1.1.10-diag1 could push its branch but not tags). The release step then
+  # creates the tag itself, on the commit this run built.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, v<version>-diag<N> or v<version>-test<N>"
+        required: true
 
 permissions:
   contents: write   # to create the prerelease and upload its files
@@ -24,6 +33,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # The tag being published: the pushed tag, or the input of a manual run.
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +48,8 @@ jobs:
         id: tag
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:TAG
+          if ($tag -notmatch '^v\d+\.\d+\.\d+-(diag|test)\d+$') { throw "$tag is not a v<version>-diag<N> or -test<N> tag" }
           # v1.1.10-diag1 -> version 1.1.10-diag1, suffix -diag1
           $version = $tag.TrimStart('v')
           $diag = $tag -match '-diag\d+$'
@@ -95,7 +108,7 @@ jobs:
           # Release notes: the tag's notes file, then the checksums of what was
           # built here, which only this job can know.
           $notes = "out/notes.md"
-          Get-Content "docs/test-builds/${{ github.ref_name }}.md" -Raw | Set-Content $notes -NoNewline
+          Get-Content "docs/test-builds/$($env:TAG).md" -Raw | Set-Content $notes -NoNewline
           Add-Content $notes "`n## Checksums`n"
           Add-Content $notes "Built by GitHub Actions from commit ${{ github.sha }}. Not code-signed, unlike the Nexus releases.`n"
           foreach ($f in @($dmm, $full, "out/PrivateStorageMaster.asi")) {
@@ -106,6 +119,9 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          # Created on the built commit when it does not exist yet (a manual run).
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           name: Private Storage Master ${{ steps.tag.outputs.version }} (${{ steps.tag.outputs.diag == 'ON' && 'diagnostic build' || 'test build' }})
           body_path: out/notes.md
           prerelease: true
