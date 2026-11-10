@@ -144,13 +144,26 @@ namespace psm::storage
         std::atomic<DWORD> g_closedAt{0};
         std::atomic<DWORD> g_openedAt{0};
         constexpr DWORD kReopenCooldownMs = 250;
-        std::atomic<DWORD> g_pauseUntil{0};
+        // When PsmPauseInput's hold ends, in GetTickCount64 milliseconds. It was
+        // a 32-bit GetTickCount deadline in 1.1.10 and earlier, compared as
+        // int32_t(until - now) > 0. With nothing ever paused, until is 0, and
+        // once Windows had been up 2^31 ms (24.86 days) that difference turned
+        // positive and stayed so: every key and combo was ignored as "paused"
+        // until the PC restarted or reached 49.7 days. A player hit it on
+        // 9 November 2026 at 25.4 days of uptime, the day a DMM update made it
+        // look like DMM's fault; 1.1.10-diag1's log showed "paused" with no
+        // PsmPauseInput call at all. The 64-bit count does not wrap.
+        std::atomic<ULONGLONG> g_pauseUntil{0};
         std::atomic<bool> g_ready{false};
         // Published by Tick for the capacity worker, which runs on its own thread.
         std::atomic<bool>  g_freePlay{false};
         std::atomic<DWORD> g_lastTick{0};
         std::atomic<bool>  g_hidingKeys{false};   // published by the poller for PsmHidingKeys
-        bool Paused() { return static_cast<int32_t>(g_pauseUntil.load() - GetTickCount()) > 0; }
+        bool Paused() { return g_pauseUntil.load() > GetTickCount64(); }
+#ifdef PSM_DIAG
+        // Milliseconds of hold left, 0 when not paused. For the diagnostic lines.
+        long PauseLeftMs() { const ULONGLONG u = g_pauseUntil.load(), n = GetTickCount64(); return u > n ? static_cast<long>(u - n) : 0L; }
+#endif
 
 #ifdef PSM_DIAG
         // ------------------------------------------------------------ diagnostics
@@ -871,12 +884,12 @@ namespace psm::storage
         {
             char mt[32], pads[256], pauses[512];
             const DWORD last = g_lastTick.load();
-            const int32_t pauseLeft = static_cast<int32_t>(g_pauseUntil.load() - now);
+            const long pauseLeft = PauseLeftMs();
             const int open = g_open.load() ? g_openChest.load() : -1;
             const int pending = g_pending.load();
             LOG("[diag] heartbeat %d: game in front %s, paused %s%ld ms, mods %s, %u frames since the last beat, last frame %ld ms ago, "
                 "mode %d screen 0x%02X, free play %s, open %s, pending %s, poller loops %u, slowest pad poll %lu ms, hiding keys %s",
-                ++d.beats, front ? "yes" : "NO", paused ? "YES " : "no, ", paused ? static_cast<long>(pauseLeft) : 0L, ModsText(mods, mt, sizeof mt),
+                ++d.beats, front ? "yes" : "NO", paused ? "YES " : "no, ", paused ? pauseLeft : 0L, ModsText(mods, mt, sizeof mt),
                 g_dTicks.exchange(0), last ? static_cast<long>(now - last) : -1L, g_dMode.load(), g_dScreen.load() & 0xFF,
                 g_freePlay.load() ? "yes" : "no", open >= 0 ? kChests[open].label : "none",
                 pending >= 0 && pending < Settings::kStorages ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
@@ -980,7 +993,7 @@ namespace psm::storage
                     if (!front) snprintf(why, sizeof why, "IGNORED: the game is not the foreground window");
                     else if (paused)
                         snprintf(why, sizeof why, "IGNORED: PsmPauseInput holds the keys for %ld ms more",
-                                 static_cast<long>(static_cast<int32_t>(g_pauseUntil.load() - now)));
+                                 PauseLeftMs());
                     else if (b >= 0) snprintf(why, sizeof why, "acted on: opens or closes %s", kChests[b].label);
                     else if (b == -2) snprintf(why, sizeof why, "acted on: the capacity dump key");
                     else if (b == -3) snprintf(why, sizeof why, "acted on: the HideKeysWithModifier toggle");
@@ -1230,7 +1243,7 @@ namespace psm::storage
         return false;
     }
     int OpenStorage() { return g_open.load() ? g_openChest.load() : -1; }
-    void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount() + ms; }
+    void PauseInput(unsigned ms) { g_pauseUntil = GetTickCount64() + ms; }
     bool HidingKeys() { return g_hidingKeys.load(std::memory_order_relaxed); }
 
     Play PlayState()
