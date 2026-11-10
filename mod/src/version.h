@@ -13,7 +13,7 @@
 // PsmStatus::gameVersion, which is char[16] and part of the shipped API, so keep
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from
 // PsmGetStatus as "2.02.00 and 2.0".
-#define PSM_GAME     "1.0.0.3392-3462"
+#define PSM_GAME     "1.0.0.3392-3576"
 // What a test build calls itself, appended to PSM_VERSION wherever the version
 // is shown (the log's [mod] line and PsmStatus::version), so a log from a
 // diagnostic build can never be read as one from the release. It comes from
