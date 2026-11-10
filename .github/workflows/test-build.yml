@@ -1,7 +1,9 @@
 # Test and diagnostic builds, published as GitHub prereleases.
 #
-# Push a tag named v<version>-test<N> or v<version>-diag<N>, or run it by hand
-# (workflow_dispatch) on a branch with that tag name as input, and this builds the
+# Push a tag named v<version>-test<N> or v<version>-diag<N>, push a branch
+# commit that adds or changes docs/test-builds/<that tag>.md, or run it by hand
+# (workflow_dispatch, which GitHub offers only once this file is on the default
+# branch) with that tag name as input, and this builds the
 # plugin with MSVC on a Windows runner, packages the same two archives
 # mod/scripts/package.ps1 makes (the full zip and the DMM zip), and publishes a
 # prerelease for the tag with the notes in docs/test-builds/<tag>.md.
@@ -14,13 +16,21 @@
 name: test build
 
 on:
+  # A branch push that touches a notes file: the notes file names the tag.
+  # For when a tag cannot be pushed; the cloud session that cut 1.1.10-diag1
+  # could push its branch but not tags, and could not dispatch a workflow that
+  # was not on the default branch yet. The release step then creates the tag
+  # itself, on the commit this run built.
+  # Tags are not filtered by paths (GitHub never applies paths to tag pushes).
   push:
     tags:
       - "v*-test*"
       - "v*-diag*"
-  # By hand, for when a tag cannot be pushed (the cloud session that cut
-  # 1.1.10-diag1 could push its branch but not tags). The release step then
-  # creates the tag itself, on the commit this run built.
+    branches:
+      - "**"
+    paths:
+      - "docs/test-builds/v*.md"
+  # By hand, the same, once this workflow is on the default branch.
   workflow_dispatch:
     inputs:
       tag:
@@ -33,11 +43,28 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      # The tag being published: the pushed tag, or the input of a manual run.
-      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the branch-push path diffs against the commit before the push
+
+      - name: Find the tag
+        shell: pwsh
+        run: |
+          # The pushed tag, the input of a manual run, or for a branch push the
+          # one notes file under docs/test-builds that the push added or changed.
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") { $tag = "${{ inputs.tag }}" }
+          elseif ("${{ github.ref_type }}" -eq "tag") { $tag = "${{ github.ref_name }}" }
+          else {
+            $before = "${{ github.event.before }}"
+            # A new branch has no "before" (all zeros): compare with its parent.
+            if ($before -match '^0+$') { $before = "${{ github.sha }}~1" }
+            $files = @(git diff --name-only --diff-filter=AM $before ${{ github.sha }} -- 'docs/test-builds/v*.md')
+            if ($files.Count -ne 1) { throw "a branch push must change exactly one docs/test-builds notes file, this one changed: $($files -join ', ')" }
+            $tag = [IO.Path]::GetFileNameWithoutExtension($files[0])
+          }
+          "TAG=$tag" >> $env:GITHUB_ENV
+          Write-Host "publishing $tag"
 
       # Puts cl, link, rc and nmake on PATH, the same as vcvars64.bat in build.bat.
       - uses: ilammy/msvc-dev-cmd@v1
