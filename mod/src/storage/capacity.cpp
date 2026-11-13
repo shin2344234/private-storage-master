@@ -248,7 +248,7 @@ namespace psm::capacity
                 uintptr_t rec = 0;
                 char name[40] = "(not loaded)";
                 uint16_t d = 0, m = 0;
-                if (mem::ReadPtr(arr + 8ull * i, &rec)) { RecordName(rec, name, sizeof name); mem::Read16(rec + inv::kRecDefault, &d); mem::Read16(rec + inv::kRecMax, &m); }
+                if (inv::RecordAt(arr, i, &rec)) { RecordName(rec, name, sizeof name); mem::Read16(rec + inv::kRecDefault, &d); mem::Read16(rec + inv::kRecMax, &m); }
                 const Target* t = nullptr;
                 for (const Target& x : g_targets)
                     if (x.seen.load() && strcmp(name, x.name) == 0) t = &x;
@@ -435,7 +435,7 @@ namespace psm::capacity
             for (uint32_t i = 0; i < n; ++i)
             {
                 uintptr_t rec = 0;
-                if (mem::ReadPtr(arr + 8ull * i, &rec)) PatchRecord(rec);
+                if (inv::RecordAt(arr, i, &rec)) PatchRecord(rec);
             }
         }
     }

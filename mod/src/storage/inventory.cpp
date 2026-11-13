@@ -25,7 +25,7 @@ namespace psm::inv
 
     bool Ready() { return g_ready.load(std::memory_order_acquire); }
     // The move and every read a deposit needs to find the bag and the storages.
-    bool CanMove() { return Ready() && g_addr.clientMoveItem && g_addr.invMgrGlobal && g_addr.invMgrVtable && g_addr.actorManagerGlobal; }
+    bool CanMove() { return Ready() && g_addr.clientMoveItem && g_addr.invMgrGlobal && g_addr.invMgrVtable && g_addr.invMgrStride && g_addr.actorManagerGlobal; }
 
     uintptr_t Manager(uint32_t* count, uintptr_t* records)
     {
@@ -33,8 +33,14 @@ namespace psm::inv
         if (!Ready() || !g_addr.invMgrGlobal || !mem::ReadPtr(g_addr.invMgrGlobal, &mgr)) return 0;
         uintptr_t vt = 0;
         if (!mem::ReadPtr(mgr, &vt) || vt != g_addr.invMgrVtable) return 0;
-        if (!mem::Read32(mgr + 0x08, count) || *count == 0 || *count > 256 || !mem::ReadPtr(mgr + 0x58, records)) return 0;
+        if (!g_addr.invMgrStride) return 0;
+        if (!mem::Read32(mgr + g_addr.invMgrCount, count) || *count == 0 || *count > 256 || !mem::ReadPtr(mgr + g_addr.invMgrArray, records)) return 0;
         return mgr;
+    }
+
+    bool RecordAt(uintptr_t records, uint32_t i, uintptr_t* rec)
+    {
+        return mem::ReadPtr(records + static_cast<uintptr_t>(g_addr.invMgrStride) * i + g_addr.invMgrEntryRec, rec);
     }
 
     bool RecordName(uintptr_t rec, char* out, size_t cap)
@@ -49,7 +55,7 @@ namespace psm::inv
         uint32_t n = 0;
         uintptr_t arr = 0, rec = 0;
         out[0] = 0;
-        return Manager(&n, &arr) && index < n && mem::ReadPtr(arr + 8ull * index, &rec) && RecordName(rec, out, cap);
+        return Manager(&n, &arr) && index < n && RecordAt(arr, index, &rec) && RecordName(rec, out, cap);
     }
 
     uintptr_t RecordByName(const char* want)
@@ -61,7 +67,7 @@ namespace psm::inv
         {
             uintptr_t rec = 0;
             char name[40];
-            if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
+            if (RecordAt(arr, i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
         }
         return 0;
     }
@@ -75,7 +81,7 @@ namespace psm::inv
         {
             uintptr_t rec = 0;
             char name[40];
-            if (mem::ReadPtr(arr + 8ull * i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return static_cast<int>(i);
+            if (RecordAt(arr, i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return static_cast<int>(i);
         }
         return -1;
     }

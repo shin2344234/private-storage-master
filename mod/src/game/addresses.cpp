@@ -22,6 +22,48 @@ namespace psm::addr
             return a;
         }
 
+        // The game's record lookup on the InventoryInfoManager, found by its shape and
+        // by loading this manager's global, gives the record table's layout. Every
+        // static info manager has a lookup of this shape, so the shape alone matches
+        // about 140 places and the global picks the one. 1.0.0.3663 moved the count
+        // from +0x08 to +0x28 and the array from +0x58 to +0x20, and made each entry
+        // 0x18 bytes with the record 8 bytes in. Read the old way, the table had no
+        // "Character" record, so no deposit ever found the bag.
+        struct LayoutCtx { uintptr_t global; unsigned countAt, arrayAt, recAt; uint32_t stride; Capacity* c; };
+
+        bool LayoutVisit(uintptr_t hit, void* p)
+        {
+            auto* x = static_cast<LayoutCtx*>(p);
+            if (mem::RipAt(hit, 7) != x->global) return false;
+            uint8_t cnt = 0, arr = 0, rec = 0;
+            if (!mem::Read8(hit + x->countAt, &cnt) || !mem::Read8(hit + x->arrayAt, &arr)) return false;
+            if (x->recAt && !mem::Read8(hit + x->recAt, &rec)) return false;
+            x->c->invMgrCount = cnt;
+            x->c->invMgrArray = arr;
+            x->c->invMgrStride = x->stride;
+            x->c->invMgrEntryRec = rec;
+            return true;
+        }
+
+        void ManagerLayout(Capacity& c)
+        {
+            // 1.0.0.3663: mov rcx,[rip+g]; cmp r8d,[rcx+count]; jb; ...; ret;
+            //             mov rax,[rcx+array]; lea rdx,[r8+r8*2]; cmp qword [rax+rdx*8+rec],0
+            LayoutCtx now{ c.invMgrGlobal, 10, 28, 37, 0x18, &c };
+            // 1.0.0.3392 to 3576: mov rbx,[rip+g]; cmp edx,[rbx+count]; jae; mov esi,edi;
+            //                     mov rax,[rbx+array]; mov rax,[rax+rdi*8]
+            LayoutCtx old{ c.invMgrGlobal, 9, 21, 0, 8, &c };
+            if (!mem::FindIf("48 8B 0D ?? ?? ?? ?? 44 3B 41 ?? 72 ?? 48 8B 05 ?? ?? ?? ?? 48 83 C4 28 C3 48 8B 41 ?? 4B 8D 14 40 48 83 7C D0 ?? 00",
+                             LayoutVisit, &now) &&
+                !mem::FindIf("48 8B 1D ?? ?? ?? ?? 3B 53 ?? 0F 83 ?? ?? ?? ?? 8B F7 48 8B 43 ?? 48 8B 04 F8", LayoutVisit, &old))
+            {
+                LOG_ERR("[addr] no record lookup reads the InventoryInfoManager global, so its table layout is unknown");
+                return;
+            }
+            LOG("[addr] inventory records: count at +0x%X, array at +0x%X, 0x%X per entry, record at +0x%X",
+                c.invMgrCount, c.invMgrArray, c.invMgrStride, c.invMgrEntryRec);
+        }
+
         // The first of several patterns that matches exactly once, newest build first,
         // so one plugin resolves on every build in PSM_GAME. Logs as Unique does.
         uintptr_t UniqueAny(const char* what, std::initializer_list<const char*> patterns)
@@ -356,6 +398,7 @@ namespace psm::addr
             if (c.invMgrGlobal) LOG("[addr] InventoryInfoManager global +%llX", R(c.invMgrGlobal));
             else LOG_ERR("[addr] InventoryInfoManager slots 2 and 3 do not name one global");
         }
+        if (c.invMgrGlobal) ManagerLayout(c);
         c.actorManagerGlobal = Global("ActorManager", "48 8B 0D ?? ?? ?? ?? 48 8B 49 58 E8 ?? ?? ?? ?? 90 40 38 74 24 40 40 0F 94 C5 48 8D 05 ?? ?? ?? ??", 7);
 
         // Loot storing (R5). The entry, then the fourth argument read back from its

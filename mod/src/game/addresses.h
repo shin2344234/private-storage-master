@@ -37,6 +37,11 @@ namespace psm::addr
         uintptr_t inventoryInfoRead = 0;   // (stream, record) -> bool; record layout in inventory.h
         uintptr_t invMgrVtable = 0;
         uintptr_t invMgrGlobal = 0;
+        // The manager's record table, read from the game's own lookup. The count
+        // is the u32 at mgr+invMgrCount and record i is
+        // [[mgr+invMgrArray] + i*invMgrStride + invMgrEntryRec]: 0x08, 0x58, 8, 0
+        // up to 1.0.0.3576 and 0x28, 0x20, 0x18, 8 on 1.0.0.3663.
+        uint32_t invMgrCount = 0, invMgrArray = 0, invMgrStride = 0, invMgrEntryRec = 0;
         uintptr_t actorManagerGlobal = 0;
         uintptr_t clientMoveItem = 0;      // R5: client check and send for an inventory-to-inventory move
         uintptr_t inventoryHolderOf = 0;   // R3C 1.2: GetInventoryHolder(actor), follows a borrowed bag

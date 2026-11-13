@@ -22,6 +22,8 @@ namespace psm::inv
     bool CanMove();   // the move function was found too
 
     uintptr_t Manager(uint32_t* count, uintptr_t* records);
+    // Record i of the table Manager returned. 1.0.0.3663 changed the entry layout.
+    bool RecordAt(uintptr_t records, uint32_t i, uintptr_t* rec);
     bool RecordName(uintptr_t rec, char* out, size_t cap);
     bool IndexName(uint16_t index, char* out, size_t cap);
     uintptr_t RecordByName(const char* want);
