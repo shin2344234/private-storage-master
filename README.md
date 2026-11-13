@@ -3,8 +3,14 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3576 (2.04.08).
+the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3663 (2.05.00).
 For 2.02.00 to 2.03.02, use 1.1.7.
+
+New in 1.1.12: the plugin runs on 2.05.00, exe 1.0.0.3663. That update moved
+the item move, the bag lookup and the table that lists every inventory, so
+1.1.11 switched loot storing off and Master Looter's deposits never left the
+bag. The plugin now reads where that table is from the game's own code, and
+the storage keys work alongside Camp Funds Withdraw on 3663 as well.
 
 New in 1.1.9: the storage keys work alongside Camp Funds Withdraw. That mod
 points one entry of the storage screen's function table into its own DLL, and
@@ -74,11 +80,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.11:
+SHA-256 for 1.1.12:
 
-    e1b9d03bd93da074f93413330f8a62a932e66b6f6b0d84335058ed3cb0b386f4  PrivateStorageMaster-1.1.11-DMM.zip
-    f2b256a189d225ebc2da13a8d051f06ae6369e46f3aed900f18e678de810f3fa  PrivateStorageMaster-1.1.11.zip
-    883073b1c3702c7f23678f0e8a4dda30ef9afabf8eb73eaf26ad7695e375ca1b  PrivateStorageMaster.asi
+    9b9e67b8b725f218ce7e55808909720a81ef29e55bc2ecb1e80d465a0b3e4c1a  PrivateStorageMaster-1.1.12-DMM.zip
+    8f37a42c9e07aeb8091780e716bf6a7c88f5a0d36adbfb14039bed5b2e66c133  PrivateStorageMaster-1.1.12.zip
+    d39ab1b6a958a8e0b9c6fe27cbdb60ea184e293c0ddd015573e36221f1da9a7f  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
