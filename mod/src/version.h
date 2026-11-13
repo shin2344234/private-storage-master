@@ -9,12 +9,13 @@
 // 1.0.0.3392 (Steam 26308950, 29 October 2026), and no longer resolves on
 // those. 1.0.0.3424 (Steam 26317560) came out the next morning and every
 // anchor, the free-play screen and the slot cap check out on it unchanged, and
-// the same holds through 1.0.0.3576 (2.04.08, 6 November 2026). The
+// the same holds through 1.0.0.3576 (2.04.08, 6 November 2026). 1.0.0.3663
+// (13 November 2026) needed three new patterns, kept beside the old ones. The
 // string is the exe versions until the patch's own name is confirmed. It has to fit
 // PsmStatus::gameVersion, which is char[16] and part of the shipped API, so keep
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from
 // PsmGetStatus as "2.02.00 and 2.0".
-#define PSM_GAME     "1.0.0.3392-3576"
+#define PSM_GAME     "1.0.0.3392-3663"
 // What a test build calls itself, appended to PSM_VERSION wherever the version
 // is shown (the log's [mod] line and PsmStatus::version), so a log from a
 // diagnostic build can never be read as one from the release. It comes from

@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <cstring>
+#include <initializer_list>
 
 #include "core/log.h"
 #include "game/mem.h"
@@ -19,6 +20,21 @@ namespace psm::addr
             if (a) LOG("[addr] %s at +%llX", what, R(a));
             else LOG_ERR("[addr] %s: pattern matched %zu places, expected one", what, hits);
             return a;
+        }
+
+        // The first of several patterns that matches exactly once, newest build first,
+        // so one plugin resolves on every build in PSM_GAME. Logs as Unique does.
+        uintptr_t UniqueAny(const char* what, std::initializer_list<const char*> patterns)
+        {
+            size_t hits = 0, last = 0;
+            for (const char* p : patterns)
+            {
+                const uintptr_t a = mem::FindUnique(p, &hits);
+                if (a) { LOG("[addr] %s at +%llX", what, R(a)); return a; }
+                last = hits;
+            }
+            LOG_ERR("[addr] %s: pattern matched %zu places, expected one", what, last);
+            return 0;
         }
 
         // A global read by the rip-relative instruction at the start of the pattern.
@@ -121,8 +137,10 @@ namespace psm::addr
             }
             if (matches == 0 && foreign > 0)
             {
+                // 1.0.0.3663 saves r8 in r13 between the two moves.
                 size_t hits = 0;
-                const uintptr_t body = mem::FindUnique("49 8B D9 4C 8B F1 E8 ?? ?? ?? ?? 80 3B 15", &hits);
+                uintptr_t body = mem::FindUnique("49 8B D9 4D 8B E8 4C 8B F1 E8 ?? ?? ?? ?? 80 3B 15", &hits);
+                if (!body) body = mem::FindUnique("49 8B D9 4C 8B F1 E8 ?? ?? ?? ?? 80 3B 15", &hits);
                 const uintptr_t entry = body ? FunctionEntry(body) : 0;
                 if (entry)
                 {
@@ -344,10 +362,12 @@ namespace psm::addr
         // home slot for the second actor lookup. The DLC build saves the four
         // register arguments relative to rsp and builds a smaller frame, so the
         // home slot is rbp+0x948 now; the ten arguments are read the same.
+        // 1.0.0.3663 took 0x20 off the frame again (rbp+0x928), so the frame size
+        // and the home slot are wildcards.
         const uintptr_t move = Unique("ClientMoveItem",
             "44 89 4C 24 20 44 89 44 24 18 48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 "
-            "48 8D AC 24 18 F7 FF FF 48 81 EC E8 09 00 00 4C 8B E2");
-        if (move && FindWithin(move, 0x100, "48 8B 49 30 E8 ?? ?? ?? ?? 90 44 8B 85 48 09 00 00")) c.clientMoveItem = move;
+            "48 8D AC 24 ?? F7 FF FF 48 81 EC ?? 09 00 00 4C 8B E2");
+        if (move && FindWithin(move, 0x100, "48 8B 49 30 E8 ?? ?? ?? ?? 90 44 8B 85 ?? 09 00 00")) c.clientMoveItem = move;
         else if (move) LOG_ERR("[addr] ClientMoveItem at +%llX no longer looks up both actors the way it did on 1.0.0.3392", R(move));
 
         // The game's own holder lookup. A character whose info says mode 1 keeps
@@ -355,8 +375,11 @@ namespace psm::addr
         // how Damiane and Oongka reach the shared bag. The character info's mode
         // byte has moved in three updates (+0x5E, +0x5F, +0x21 on the DLC build),
         // which is why the game decides rather than the mod. On the DLC build the
-        // info lookup takes its key by value in edx.
-        c.inventoryHolderOf = Unique("GetInventoryHolder", "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 50 20 0F B7 52 30 E8");
+        // info lookup takes its key by value in edx, and 1.0.0.3663 passes it by
+        // pointer from a stack slot.
+        c.inventoryHolderOf = UniqueAny("GetInventoryHolder", {
+            "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 48 20 0F B7 41 30 48 8D 4C 24 30",
+            "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 50 20 0F B7 52 30 E8"});
         return c.inventoryInfoRead && c.invMgrGlobal;
     }
 
