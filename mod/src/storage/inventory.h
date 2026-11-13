@@ -37,6 +37,12 @@ namespace psm::inv
     constexpr unsigned kRecDefault = 0x10;    // two bytes
     constexpr unsigned kRecMax = 0x14;        // two bytes
     constexpr unsigned kRecMoveList = 0x38;   // pointer, count at +0x40, element stride 0xA0
+    // _collectionItemList: pointer, u32 count at +0x98, u32 capacity at +0x9C,
+    // 16-byte elements {u16 item, s64 limit at +8}. Read on 3663 from the field's
+    // reader (+179D970), which the deserializer (+177CD80) calls for the field
+    // its error string names. Housing_Collecting has 997 entries, each limit 1.
+    constexpr unsigned kRecCollection = 0x90;
+    constexpr unsigned kRecCollectionCount = 0x98;
 
     uintptr_t PlayerCharacter();
     // The bag of whoever is being played, as the game itself resolves it, borrowed

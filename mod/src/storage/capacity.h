@@ -30,6 +30,8 @@ namespace psm::capacity
 
     bool Hooked();
     int LearnedPrivateExtras();
+    // The Collectibles Chest's size once its record has been read, else 0.
+    int CollectingSlots();
     // Refreshed about once a second while something keeps asking.
     void GetSize(int storage, SizeInfo& out);
 }

@@ -144,7 +144,11 @@ PSM_EXPORT void PsmWriteDump(void) { psm::capacity::RequestDump(); }
 
 PSM_EXPORT int PsmFixedSlots(int storage)
 {
-    return storage >= 0 && storage < PSM_STORAGES ? psm::Settings::kFixedSlots[storage] : 0;
+    if (storage < 0 || storage >= PSM_STORAGES) return 0;
+    // The Collectibles Chest is sized from the game's record, so Master Looter
+    // shows that number as a fixed row once the record has been read.
+    if (storage == psm::Settings::kCollecting) return psm::capacity::CollectingSlots();
+    return psm::Settings::kFixedSlots[storage];
 }
 
 PSM_EXPORT void PsmPauseInput(uint32_t ms)

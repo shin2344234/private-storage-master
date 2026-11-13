@@ -276,6 +276,16 @@
           "help": "Slots for the Kuku Cooler, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
           "order": 44
         },
+        "CollectingSlots": {
+          "label": "Collectibles Chest slots",
+          "type": "int",
+          "group": "Sizes",
+          "min": 0,
+          "max": 1460,
+          "default": "0",
+          "help": "Slots for the Collectibles Chest, up to 1460. 0 takes the size from the game, the larger of its list of collectibles and its own maximum, which is 1400 on 2.05.00. A bigger number raises it, and a smaller one does nothing. Takes effect next start.",
+          "order": 45
+        },
         "CampStrawSlots": {
           "label": "Camp Straw slots",
           "type": "int",
@@ -284,7 +294,7 @@
           "max": 1460,
           "default": "1000",
           "help": "Slots for Camp Straw, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
-          "order": 45
+          "order": 46
         },
         "TownWarehouseSlots": {
           "label": "Camp Provisions slots",
@@ -294,7 +304,7 @@
           "max": 1460,
           "default": "1000",
           "help": "Slots for Camp Provisions, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
-          "order": 46
+          "order": 47
         },
         "AbyssGearSlots": {
           "label": "Abyss Gear Storage slots",
@@ -304,7 +314,7 @@
           "max": 1460,
           "default": "1000",
           "help": "Slots for Abyss gear storage, up to 1460. 0 keeps the game's size, and a number below the game's size does the same; the mod never makes storage smaller. Takes effect next start.",
-          "order": 47
+          "order": 48
         },
         "PrivateStorageExpansions": {
           "label": "Story slots to add on top",

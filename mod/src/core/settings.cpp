@@ -288,8 +288,10 @@ namespace psm::Settings
                 if (i == kBirdFeed)
                     fprintf(f, "; %sSlots stays at the game's %d: birds only land while the feeder is at least\n"
                                "; 1%% full, and a bigger feeder needs far more feed to get there.\n", kInfo[i].key, kFixedSlots[i]);
-                else if (kFixedSlots[i])
-                    fprintf(f, "; %sSlots is always %d: the chest holds one of each collectible.\n", kInfo[i].key, kFixedSlots[i]);
+                else if (i == kCollecting)
+                    fprintf(f, "; %sSlots: 0 takes the size from the game, the larger of its list of\n"
+                               "; collectibles and its own maximum (1400 on 2.05.00). A bigger number raises it.\n"
+                               "%sSlots=%d\n", kInfo[i].key, kInfo[i].key, v.slots[i]);
                 else
                     fprintf(f, "%sSlots=%d\n", kInfo[i].key, v.slots[i]);
             }

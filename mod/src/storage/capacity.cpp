@@ -96,10 +96,44 @@ namespace psm::capacity
             WritePrivateProfileStringA("PrivateStorageMaster", "PrivateStorageExtras", v, file.c_str());
         }
 
+        // The Collectibles Chest's size and where it came from, for the log and for
+        // PsmFixedSlots. Written once by Plan on a loader thread.
+        enum CollectSource { kFromMax = 1, kFromList, kFromSetting };
+        std::atomic<int> g_collectSize{0};
+        int g_collectSource = 0, g_collectList = -1, g_collectMax = 0;
+
+        // The number of entries in the record's collection list, or -1 when it does
+        // not read as one: a pointer, a count no bigger than a few slot arrays, and
+        // a first entry whose limit is 1, which is what every entry holds on 3663.
+        int CollectionCount(uintptr_t rec)
+        {
+            uintptr_t list = 0;
+            uint32_t n = 0;
+            int64_t limit = 0;
+            if (!mem::ReadPtr(rec + inv::kRecCollection, &list) || !mem::Read32(rec + inv::kRecCollectionCount, &n)) return -1;
+            if (!list || n == 0 || n > 4u * kSlotArray) return -1;
+            if (!mem::ReadBytes(list + 8, &limit, sizeof limit) || limit != 1) return -1;
+            return static_cast<int>(n);
+        }
+
+        // The chest takes one of each collectible, and on 2.05.00 the game's record
+        // allows 1400 against a list of 997, so the size is the larger of the two,
+        // raised by CollectingSlots if that is bigger still. 1.0.0 to 1.1.12 held it
+        // at 958, the list's length on 2.02 and 2.03.
+        int CollectingSize(uintptr_t rec, uint16_t m, int setting, int* source, int* list)
+        {
+            *list = CollectionCount(rec);
+            int size = m;
+            *source = kFromMax;
+            if (*list > size) { size = *list; *source = kFromList; }
+            if (setting > size) { size = setting; *source = kFromSetting; }
+            return size < kSlotArray ? size : kSlotArray;
+        }
+
         // Sizes from the stock record, per R2 section 6: default and max move by the
         // same amount, so AddExpand clamps where the game had it and saved
         // expansion counts come back unchanged.
-        void Plan(Target& t, uint16_t d, uint16_t m, uint8_t needSave)
+        void Plan(Target& t, uintptr_t rec, uint16_t d, uint16_t m, uint8_t needSave)
         {
             t.stockDefault = d;
             t.stockMax = m;
@@ -108,6 +142,12 @@ namespace psm::capacity
             t.newMax = m;
             if (!t.wanted) return;
             int want = Settings::Startup().slots[t.storage];
+            if (t.storage == Settings::kCollecting)
+            {
+                want = CollectingSize(rec, m, want, &g_collectSource, &g_collectList);
+                g_collectMax = m;
+                g_collectSize = want > d ? want : d;
+            }
             if (want > kSlotArray) want = kSlotArray;
             if (want <= d) return;
             if (t.storage == 0)
@@ -143,7 +183,7 @@ namespace psm::capacity
                 if (!mem::Read16(rec + inv::kRecDefault, &d) || !mem::Read16(rec + inv::kRecMax, &m) || !mem::Read8(rec + inv::kRecNeedSave, &needSave)) return;
                 if (!t.seen.load())
                 {
-                    Plan(t, d, m, needSave);
+                    Plan(t, rec, d, m, needSave);
                     t.seen = true;
                 }
                 if (t.newDefault == t.stockDefault && t.newMax == t.stockMax) return;
@@ -219,18 +259,18 @@ namespace psm::capacity
         void WatchFurnitureSlots()
         {
             static ULONGLONG s_next = 0;
-            static int s_cap[3] = {-1, -1, -1}, s_requested[3] = {-1, -1, -1};
+            static int s_cap[4] = {-1, -1, -1, -1}, s_requested[4] = {-1, -1, -1, -1};
             const ULONGLONG now = GetTickCount64();
             if (now < s_next) return;
             s_next = now + 1000;
-            for (int i = 0; i < 3; ++i)
+            for (int i = 0; i < 4; ++i)
             {
                 const Target& t = g_targets[i + 1];
                 Bucket b{};
                 if (!FindBucket(t.name, b)) continue;
                 if (b.cap == s_cap[i] && b.requested == s_requested[i]) continue;
                 LOG_NOTE("[capacity] %s is %d slots, %d added by furniture or buffs (was %d and %d), its setting %s", t.name, b.cap, b.requested,
-                         s_cap[i], s_requested[i], t.wanted ? "fixes the size" : "is 0");
+                         s_cap[i], s_requested[i], t.storage == Settings::kCollecting ? "and the game's record set the size" : t.wanted ? "fixes the size" : "is 0");
                 s_cap[i] = b.cap;
                 s_requested[i] = b.requested;
             }
@@ -335,6 +375,18 @@ namespace psm::capacity
             WriteState();
         }
 
+        void LogCollecting()
+        {
+            char list[48];
+            if (g_collectList > 0) snprintf(list, sizeof list, "its list of %d collectibles", g_collectList);
+            else snprintf(list, sizeof list, "its list of collectibles, which did not read");
+            const char* from = g_collectSource == kFromSetting ? "CollectingSlots"
+                               : g_collectSource == kFromList  ? "the game's list of collectibles"
+                                                               : "the game's own maximum for the chest";
+            LOG_NOTE("[capacity] Collectibles Chest is %d slots, from %s. The game's record has a maximum of %d and %s.", g_collectSize.load(), from,
+                     g_collectMax, list);
+        }
+
         void FlushLog()
         {
             // A line per storage with DebugLog=1, one line for all of them without.
@@ -346,6 +398,7 @@ namespace psm::capacity
                 if (!t.logged)
                 {
                     LOG("[capacity] %s: default %u -> %u, max %u -> %u", t.name, t.stockDefault, t.newDefault, t.stockMax, t.newMax);
+                    if (t.storage == Settings::kCollecting) LogCollecting();
                     ++fresh;
                 }
                 else
@@ -448,7 +501,8 @@ namespace psm::capacity
         {
             for (Target& t : g_targets)
             {
-                t.wanted = v.slots[t.storage] > 0;
+                // The Collectibles Chest is sized from the game's record even at 0.
+                t.wanted = v.slots[t.storage] > 0 || t.storage == Settings::kCollecting;
                 any |= t.wanted;
             }
         }
@@ -551,6 +605,8 @@ namespace psm::capacity
     bool Hooked() { return g_hooked.load(); }
 
     int LearnedPrivateExtras() { return g_privateExtras; }
+
+    int CollectingSlots() { return g_collectSize.load(); }
 
     void GetSize(int storage, SizeInfo& out)
     {

@@ -149,7 +149,9 @@ Sizes
 0 keeps the game's size, and the mod never makes storage smaller than the game
 would. Since 1.1.5 Private Storage is PrivateStorageSlots in every save: the
 slots the story adds later are taken back off, never below the game's own
-size. The Collectibles Chest is always 958. Since 1.1.6 the Bird Feeder stays
+size. The Collectibles Chest takes its size from the game, 1400 on 2.05.00,
+and CollectingSlots can only raise it. Up to 1.1.12 it was fixed at 958, which
+the DLC's new collectibles outgrew. Since 1.1.6 the Bird Feeder stays
 at the game's 50, because birds only land while it is at least 1% full.
 LeaveCapacityAlone=1 turns every size off, for use with JSON capacity mods.
 
