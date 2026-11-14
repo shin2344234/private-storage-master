@@ -38,7 +38,9 @@ New in 1.1.0: with [Master Looter](https://www.nexusmods.com/crimsondesert/mods/
 your storage. Ore and plants go to the Gatherables Chest, food to the Kuku
 Cooler, collectibles to the Collectibles Chest. Since 1.1.1, with Master Looter
 1.6.29, it works as Damiane and Oongka too. Only what was just picked up
-moves and money stays with you. Since 1.1.4, so do arrows you pick back up. It is off until you tick "Put what Master
+moves and money stays with you. Since 1.1.4, so do arrows you pick back up. Since 1.1.13 the
+camp Bird Feeder is off by default, because it is the only storage that takes caught fish and
+raw meat, and a fish a quest needed went there. It is off until you tick "Put what Master
 Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
 needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
 

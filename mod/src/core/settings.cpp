@@ -334,10 +334,19 @@ namespace psm::Settings
                     "AutoStore=%d\n\n"
                     "; 1 lets that storage receive loot. Private Storage takes almost anything, so it\n"
                     "; is off by default; the Wardrobe is off so new gear stays with you to look at.\n"
-                    "; Camp Provisions holds trade goods only and never receives loot.\n",
+                    "; Bird Feed is off because it is the only storage that takes caught fish and raw\n"
+                    "; meat, so with it on every fish Master Looter catches leaves your bag, even one\n"
+                    "; a quest asks you to hand in. Grain and fruit go there too once the Kuku Cooler\n"
+                    "; is full. Camp Provisions holds trade goods only and never receives loot.\n",
                     v.autoStore ? 1 : 0);
             for (int i = 0; i < kStorages; ++i)
                 if (i != kTownWarehouse) fprintf(f, "AutoStore%s=%d\n", kInfo[i].key, v.autoStoreTo[i] ? 1 : 0);
+            fprintf(f,
+                    "\n; Which of the mod's default switches the ones above have taken in. Leave it\n"
+                    "; as it is: it is how a default that changes later reaches your file once,\n"
+                    "; and a switch you turn back on after that stays on.\n"
+                    "AutoStoreDefaultsVersion=%d\n",
+                    v.autoStoreDefaultsVersion);
             // Runs of three or more consecutive numbers are written as a range.
             char never[kNeverMoveMax * 7] = "";
             for (int i = 0; i < v.autoStoreNeverMoveCount;)
@@ -417,7 +426,7 @@ namespace psm::Settings
         {
             FILE* f = nullptr;
             if (_wfopen_s(&f, Paths::File(PSM_INI).c_str(), L"r") != 0 || !f) return;
-            bool sawNeverMove = false, sawNeverMoveVersion = false;
+            bool sawNeverMove = false, sawNeverMoveVersion = false, sawDefaultsVersion = false;
             char line[512];
             while (fgets(line, sizeof line, f))
             {
@@ -445,6 +454,7 @@ namespace psm::Settings
                 else if (_stricmp(key, "AutoStoreOnlyGained") == 0) out.autoStoreOnlyGained = atoi(val) != 0;
                 else if (_stricmp(key, "AutoStoreNeverMove") == 0) { ParseItemList(val, out); sawNeverMove = true; }
                 else if (_stricmp(key, "AutoStoreNeverMoveVersion") == 0) { out.autoStoreNeverMoveVersion = atoi(val); sawNeverMoveVersion = true; }
+                else if (_stricmp(key, "AutoStoreDefaultsVersion") == 0) { out.autoStoreDefaultsVersion = atoi(val); sawDefaultsVersion = true; }
                 else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
@@ -492,6 +502,26 @@ namespace psm::Settings
             // A list with no version was written before versions existed, so it has
             // the first default list and nothing added since.
             if (sawNeverMove && !sawNeverMoveVersion) out.autoStoreNeverMoveVersion = 1;
+            // Every ini written before the defaults version existed has the first
+            // defaults, which had Bird Feed on.
+            if (!sawDefaultsVersion) out.autoStoreDefaultsVersion = 1;
+        }
+
+        // Applies what the default storage switches changed since the ini took
+        // them in, once. True when a switch or the version changed.
+        bool UpgradeAutoStoreDefaults(Values& v)
+        {
+            if (v.autoStoreDefaultsVersion >= kAutoStoreDefaultsVersion) return false;
+            if (v.autoStoreDefaultsVersion < 2 && v.autoStoreTo[kBirdFeed])
+            {
+                // Version 2: Bird Feed off. It is the only storage that takes caught
+                // fish and raw meat, so a fish a quest wanted left the bag (LuxDragon).
+                v.autoStoreTo[kBirdFeed] = false;
+                LOG_NOTE("[settings] Bird Feed no longer receives loot, so caught fish and raw meat stay in your bag. "
+                         "Tick Bird Feed on Master Looter's Storage tab, or set AutoStoreBirdFeed=1, to store there again.");
+            }
+            v.autoStoreDefaultsVersion = kAutoStoreDefaultsVersion;
+            return true;
         }
 
         // Adds what the default never-move list gained since the ini's own list
@@ -681,7 +711,8 @@ namespace psm::Settings
             ImportOld(v);
         Clamp(v);
         Deduplicate(v);
-        const bool upgraded = UpgradeNeverMove(v);
+        const bool neverMoveUpgraded = UpgradeNeverMove(v);
+        const bool upgraded = UpgradeAutoStoreDefaults(v) || neverMoveUpgraded;
         if (!have || upgraded) WriteIni(v);
         g_startup = new Values(v);
         Publish(v);
@@ -774,7 +805,8 @@ namespace psm::Settings
         ReadIni(v);
         Clamp(v);
         Deduplicate(v);
-        const bool upgraded = UpgradeNeverMove(v);
+        const bool neverMoveUpgraded = UpgradeNeverMove(v);
+        const bool upgraded = UpgradeAutoStoreDefaults(v) || neverMoveUpgraded;
         AcquireSRWLockExclusive(&g_writeLock);
         Publish(v);
         if (upgraded) WriteIni(v);

@@ -42,7 +42,7 @@ Each item goes to the first storage in this list that is ticked and takes it:
     Abyss gear storage
     Gatherables Chest
     Kuku Cooler
-    Bird Feed
+    Bird Feed              off by default, see below
     Camp Straw             also takes teas and cooked food
     Wardrobe               off by default, so new gear stays with you
     Private Storage        off by default, since it takes almost anything
@@ -50,6 +50,13 @@ Each item goes to the first storage in this list that is ticked and takes it:
 Camp Provisions holds trade goods only and never receives loot. The game's
 own rules decide what each storage takes, and anything none of them takes
 stays in your bag. A full storage is skipped and the next one is tried.
+
+Bird Feed is the only storage that takes caught fish and raw meat, and it
+gets grain and fruit once the Kuku Cooler is full. With it on, every fish
+Master Looter catches leaves your bag, even one a quest asks you to hand in.
+So it has been off by default since 1.1.13, and an ini from an earlier
+version has it turned off once (AutoStoreDefaultsVersion records that). Tick
+it on the Storage tab, or set AutoStoreBirdFeed=1, and it stays on.
 
 Only what was just picked up moves. If you carry 20 bread and Master Looter
 picks up 5, the 5 go to the Kuku Cooler and your 20 stay. Untick "Only move

@@ -77,6 +77,8 @@ def parse_constants(h):
     c["kTownWarehouse"] = int(must(r"kTownWarehouse = (\d+);", h, "kTownWarehouse").group(1))
     c["kNeverMoveMax"] = int(must(r"kNeverMoveMax = (\d+);", h, "kNeverMoveMax").group(1))
     c["kNeverMoveVersion"] = int(must(r"kNeverMoveVersion = (\d+);", h, "kNeverMoveVersion").group(1))
+    c["kAutoStoreDefaultsVersion"] = int(must(r"kAutoStoreDefaultsVersion = (\d+);", h,
+                                              "kAutoStoreDefaultsVersion").group(1))
     c["kMaxStackMultiplier"] = int(must(r"kMaxStackMultiplier = (\d+);", h, "kMaxStackMultiplier").group(1))
     if len(c["kFixedSlots"]) != c["kStorages"]:
         raise ValueError("kFixedSlots has %d entries, kStorages says %d" % (len(c["kFixedSlots"]), c["kStorages"]))
@@ -233,6 +235,13 @@ def main():
     if not autostore_keys.get("AutoStoreNeverMoveVersion", {}).get("readonly"):
         errors.append("AutoStoreNeverMoveVersion: should be readonly. The comment above it in the written ini "
                        "says to leave it as it is.")
+    check("AutoStore", autostore_keys, "AutoStoreDefaultsVersion", {
+        "type": "int",
+        "default": str(const["kAutoStoreDefaultsVersion"]),
+    })
+    if not autostore_keys.get("AutoStoreDefaultsVersion", {}).get("readonly"):
+        errors.append("AutoStoreDefaultsVersion: should be readonly. The comment above it in the written ini "
+                       "says to leave it as it is.")
 
     want_never_move = compress_ranges(defaults["autoStoreNeverMove"])
     got_never_move = autostore_keys.get("AutoStoreNeverMove", {}).get("default")
@@ -281,7 +290,8 @@ def main():
         errors.append("%s: in the metadata's PrivateStorageMaster section but not read by, or not written by, "
                        "the code" % k)
 
-    expected_autostore = {"AutoStore", "AutoStoreOnlyGained", "AutoStoreNeverMove", "AutoStoreNeverMoveVersion"}
+    expected_autostore = {"AutoStore", "AutoStoreOnlyGained", "AutoStoreNeverMove", "AutoStoreNeverMoveVersion",
+                          "AutoStoreDefaultsVersion"}
     for i, s in enumerate(storages):
         if i != town:
             expected_autostore.add("AutoStore" + s["key"])

@@ -52,6 +52,7 @@ namespace psm::Settings
     inline constexpr int kTownWarehouse = 7;
     inline constexpr int kNeverMoveMax = 64;
     inline constexpr int kNeverMoveVersion = 2;   // see Values::autoStoreNeverMoveVersion
+    inline constexpr int kAutoStoreDefaultsVersion = 2;   // see Values::autoStoreDefaultsVersion
     // The largest multiple a stack limit is raised by. The per-item ceiling in
     // storage/stacks stops the result running away; this stops a typo like
     // 100000 from turning every small stack into a huge one.
@@ -89,8 +90,11 @@ namespace psm::Settings
         // PsmDeposit and storage/deposit moves it. Off until the player turns it on.
         bool autoStore = false;
         // Which storages may receive loot. Private Storage last and only when on; the
-        // Wardrobe off so new gear is seen before it is put away.
-        bool autoStoreTo[kStorages] = {false, true, false, true, true, true, true, false, true};
+        // Wardrobe off so new gear is seen before it is put away. Bird Feed off
+        // since 1.1.13: it is the only storage that takes caught fish and raw meat,
+        // so every fish Master Looter caught went there, quest hand-ins included
+        // (LuxDragon's burbots, 14 November).
+        bool autoStoreTo[kStorages] = {false, true, false, true, true, true, false, false, true};
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;
@@ -110,6 +114,10 @@ namespace psm::Settings
         // takes it off again keeps it off. Raise it with the next item that
         // every existing list should get.
         int autoStoreNeverMoveVersion = kNeverMoveVersion;
+        // Which default storage switches the ini has taken in. An ini written
+        // before 1.1.13 has none and reads as 1; the first start then turns Bird
+        // Feed off once and saves 2, so a player who turns it back on keeps it.
+        int autoStoreDefaultsVersion = kAutoStoreDefaultsVersion;
     };
 
     void Load();                  // once, at startup

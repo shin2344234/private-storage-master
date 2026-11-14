@@ -437,10 +437,10 @@
           "label": "Store loot in Bird Feed",
           "type": "bool",
           "group": "Storages",
-          "default": "1",
+          "default": "0",
           "true": "1",
           "false": "0",
-          "help": "1 lets Bird Feed receive loot.",
+          "help": "1 lets Bird Feed receive loot. Off by default because it is the only storage that takes caught fish and raw meat, so with it on every fish Master Looter catches leaves your bag, even one a quest asks you to hand in. Grain and fruit go there too once the Kuku Cooler is full.",
           "order": 16
         },
         "AutoStoreAbyssGear": {
@@ -452,6 +452,16 @@
           "false": "0",
           "help": "1 lets Abyss gear storage receive loot.",
           "order": 17
+        },
+        "AutoStoreDefaultsVersion": {
+          "label": "Storage defaults version",
+          "type": "int",
+          "group": "Storages",
+          "default": "2",
+          "readonly": true,
+          "advanced": true,
+          "help": "Which of the mod's default storage switches the ones above have taken in. Leave it as it is: it is how a default that changes later reaches your file once, and a switch you turn back on after that stays on.",
+          "order": 18
         },
 
         "AutoStoreOnlyGained": {
