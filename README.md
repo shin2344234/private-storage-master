@@ -6,6 +6,19 @@ own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
 the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3663 (2.05.00).
 For 2.02.00 to 2.03.02, use 1.1.7.
 
+New in 1.1.14: the storage keys work when another mod has hooked the same game
+function. On 1.1.13 the plugin looked for the game's storage close function at
+its first byte, and another mod's jump there hid it, so it switched every storage
+key off. It now finds the function by code further in, and when something
+already jumps from a function it needs, it hooks where that jump lands, so both
+mods' hooks run. The log names the module each jump lands in. jerry reported it.
+A storage key set to the plain 0 key stays set on the next start, where it came
+back unbound. INI Master offers only the keys the storage bindings accept. When
+one storage hook cannot go in, the size and stack hooks stay in. Stack sizes
+report as applied when the game reads its item table late. Four timers and a
+lock no longer stop or misfire after 49.7 days of Windows uptime or on a
+startup race.
+
 New in 1.1.13: loot storing leaves the camp Bird Feeder off by default. It is
 the only storage that takes caught fish and raw meat, so every fish Master
 Looter caught went there, quest fish included. An ini from an earlier version
@@ -90,11 +103,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.13:
+SHA-256 for 1.1.14:
 
-    1986d2a501c91dd9a6514c87d5a5b6e5a17467ee1fb5a9f4af725cfe01cc941e  PrivateStorageMaster-1.1.13-DMM.zip
-    87b57ea1b767f148f6aa36bf9fca36b4e961e35c62a2b226dd553255a599c612  PrivateStorageMaster-1.1.13.zip
-    50fb88188b5c6e0158dd51207599f539151473ffb1d38115da81b307ea9a27a2  PrivateStorageMaster.asi
+    f0d2967a43aae3e77826535e684cdf3bfe9d0b994e30d9babff51dcc3ca057d2  PrivateStorageMaster-1.1.14-DMM.zip
+    509eb22dbad6bc480be02f7e0799470f933672a7f61a4b8853d4cb837a2501ec  PrivateStorageMaster-1.1.14.zip
+    e40d41c7cfb39ec3762cfe3aa6be526078fd8192b08e7e9dcf75cecaaaca0ecf  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

@@ -1,4 +1,4 @@
-Private Storage Master 1.1.13 for Crimson Desert 1.0.0.3392 to 1.0.0.3663
+Private Storage Master 1.1.14 for Crimson Desert 1.0.0.3392 to 1.0.0.3663
 ========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -8,11 +8,12 @@ Looter puts your loot straight into storage.
 Install
 -------
 
-1.1.13 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3663
+1.1.14 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3663
 (2.05.00). On 2.02.00 to 2.03.02, use 1.1.7, which stays on the Files tab.
 Your ini carries over either way. On 2.05.00, 1.1.11 stored no loot, and
 1.1.12 is the first version that does. 1.1.13 turns Bird Feed off for loot
-storing and gives the Collectibles Chest its full size, see below.
+storing and gives the Collectibles Chest its full size, see below. 1.1.14 keeps
+the storage keys working when another mod hooks the same game function.
 
 1. Remove PrivateStorageAnywhere.asi from bin64 and disable it in your mod
    manager. Leave its ini in place for the first launch so your bindings are
@@ -109,6 +110,12 @@ is open closes the storage for you, the way Esc does. Before, the chest menu cou
 stay on screen with Esc and the storage keys doing nothing. If a storage key does
 nothing at all, PrivateStorageMaster.log names the game functions the plugin could
 not find on your game build, and Master Looter shows the same text as Last error.
+
+Since 1.1.14, when another mod has already hooked a game function the keys
+need, the plugin hooks where that mod's jump lands and both run. Before, the
+keys went off with "StageClose: pattern matched 0 places" in the log. The log
+now names the module the jump lands in. A key bound to the plain 0 key also
+keeps its binding on the next start.
 
 Holding Ctrl keeps F1 to F12 from the game, so a slip from one storage key to
 the next F key goes nowhere. Every other key gets through, because Ctrl is also
