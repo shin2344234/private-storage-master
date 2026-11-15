@@ -114,6 +114,11 @@ namespace psm::stacks
             }
             if (slot >= 0) g_entries[slot] = Entry{rec, stock, want};
             ++g_patched;
+            // Flush calls it too late when nothing was raised 10 s in, but a slow
+            // load reads the item table after that, and then stacks do apply.
+            int late = kTooLate;
+            if (g_reason.compare_exchange_strong(late, kApplying))
+                LOG_NOTE("[stacks] the game read its item table after the 10 s check, and stacks apply after all");
             if (want > g_biggest.load()) g_biggest = want;
             if (Log::Debug() && g_logged.fetch_add(1) < 10)
             {
@@ -197,7 +202,16 @@ namespace psm::stacks
                      static_cast<long long>(g_biggest.load()), g_unstackable.load());
         else
         {
-            g_reason = kTooLate;
+            // Only from applying, and undone if a record was raised meanwhile, so a
+            // patch landing between the count and this store is not lost.
+            int applying = kApplying;
+            if (!g_reason.compare_exchange_strong(applying, kTooLate)) return;
+            if (g_patched.load())
+            {
+                int late = kTooLate;
+                g_reason.compare_exchange_strong(late, kApplying);
+                return;
+            }
             LOG_ERR("[stacks] no item was raised, so the game read its item table before the mod started. Stack sizes are the game's this session.");
         }
     }
