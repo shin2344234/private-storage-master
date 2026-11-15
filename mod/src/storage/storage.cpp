@@ -872,7 +872,7 @@ namespace psm::storage
             HWND fg = reinterpret_cast<HWND>(-1);   // last foreground window seen
             HWND guiFocus = reinterpret_cast<HWND>(-1), guiActive = reinterpret_cast<HWND>(-1);
             bool keyWas[256] = {};
-            DWORD nextBeat = 0;
+            DWORD lastBeat = 0;
             DWORD started = 0;
             int beats = 0;
             UINT rawCount = 0xFFFFFFFF;
@@ -1023,11 +1023,13 @@ namespace psm::storage
                 d.keyWas[vk] = down;
             }
 
-            // A beat every 5 s for the first two minutes, then every 15 s.
-            if (now >= d.nextBeat)
+            // A beat every 5 s for the first two minutes, then every 15 s. Measured
+            // as time since the last beat, since a DWORD deadline wraps after 49.7
+            // days of uptime and then stays ahead of now (#20).
+            if (!d.beats || now - d.lastBeat >= (now - d.started < 120000 ? 5000u : 15000u))
             {
                 DiagHeartbeat(d, now, front, paused, mods);
-                d.nextBeat = now + (now - d.started < 120000 ? 5000 : 15000);
+                d.lastBeat = now;
             }
         }
 #endif
