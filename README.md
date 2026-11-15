@@ -6,6 +6,14 @@ own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
 the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3663 (2.05.00).
 For 2.02.00 to 2.03.02, use 1.1.7.
 
+New in 1.1.13: loot storing leaves the camp Bird Feeder off by default. It is
+the only storage that takes caught fish and raw meat, so every fish Master
+Looter caught went there, quest fish included. An ini from an earlier version
+has it switched off once, and a player who turns it back on keeps it. LuxDragon
+reported it. The Collectibles Chest also takes its size from the game now, 1,400
+slots on 2.05.00, where it was fixed at 958 and the DLC's new collectibles
+overflowed it. Kuradeon and mrectoplasma reported that.
+
 New in 1.1.12: the plugin runs on 2.05.00, exe 1.0.0.3663. That update moved
 the item move, the bag lookup and the table that lists every inventory, so
 1.1.11 switched loot storing off and Master Looter's deposits never left the
@@ -40,9 +48,9 @@ Cooler, collectibles to the Collectibles Chest. Since 1.1.1, with Master Looter
 1.6.29, it works as Damiane and Oongka too. Only what was just picked up
 moves and money stays with you. Since 1.1.4, so do arrows you pick back up. Since 1.1.13 the
 camp Bird Feeder is off by default, because it is the only storage that takes caught fish and
-raw meat, and a fish a quest needed went there. It is off until you tick "Put what Master
-Looter picks up into storage" on Master Looter's Storage tab. How it works and what it
-needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
+raw meat, and a fish a quest needed went there. Loot storing itself is off until you tick
+"Put what Master Looter picks up into storage" on Master Looter's Storage tab. How it works
+and what it needs is in [mod/README.md](mod/README.md#loot-straight-into-storage).
 
 New in 1.1.7: a cutscene, dialog, minigame or fade that starts while a storage is
 open closes the storage, where it used to leave the chest menu on screen with Esc
@@ -82,11 +90,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.12:
+SHA-256 for 1.1.13:
 
-    9b9e67b8b725f218ce7e55808909720a81ef29e55bc2ecb1e80d465a0b3e4c1a  PrivateStorageMaster-1.1.12-DMM.zip
-    8f37a42c9e07aeb8091780e716bf6a7c88f5a0d36adbfb14039bed5b2e66c133  PrivateStorageMaster-1.1.12.zip
-    d39ab1b6a958a8e0b9c6fe27cbdb60ea184e293c0ddd015573e36221f1da9a7f  PrivateStorageMaster.asi
+    1986d2a501c91dd9a6514c87d5a5b6e5a17467ee1fb5a9f4af725cfe01cc941e  PrivateStorageMaster-1.1.13-DMM.zip
+    87b57ea1b767f148f6aa36bf9fca36b4e961e35c62a2b226dd553255a599c612  PrivateStorageMaster-1.1.13.zip
+    50fb88188b5c6e0158dd51207599f539151473ffb1d38115da81b307ea9a27a2  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
