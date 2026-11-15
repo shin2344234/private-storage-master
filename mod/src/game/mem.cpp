@@ -39,23 +39,16 @@ namespace psm::mem
         struct Region { uintptr_t base, end; DWORD when; bool ok; };
         Region g_regs[256];
         int    g_regN = 0, g_regNext = 0;
-        CRITICAL_SECTION g_regCs;
-        LONG   g_regCsReady = 0;
+        // Statically initialised, so there is no first-use setup to race. The
+        // old critical section was set up on first use, and a second thread
+        // arriving mid-setup could enter it before InitializeCriticalSection
+        // returned. Nothing under this lock takes it again, so a non-recursive
+        // lock is enough.
+        SRWLOCK g_regLock = SRWLOCK_INIT;
         volatile LONG g_faults = 0;
 
-        void RegLock()
-        {
-            if (InterlockedCompareExchange(&g_regCsReady, 1, 0) == 0)
-                InitializeCriticalSection(&g_regCs);
-            while (InterlockedCompareExchange(&g_regCsReady, 2, 2) != 2)
-            {
-                // First initializer publishes state 2 once the CS is ready.
-                if (InterlockedCompareExchange(&g_regCsReady, 2, 1) == 1) break;
-                Sleep(0);
-            }
-            EnterCriticalSection(&g_regCs);
-        }
-        void RegUnlock() { LeaveCriticalSection(&g_regCs); }
+        void RegLock() { AcquireSRWLockExclusive(&g_regLock); }
+        void RegUnlock() { ReleaseSRWLockExclusive(&g_regLock); }
     }
 
     long FaultCount() { return g_faults; }
