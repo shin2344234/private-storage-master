@@ -252,7 +252,24 @@ namespace psm::addr
                 LOG("[addr] ModeSwitch entry +%llX", R(entry));
             }
         }
-        s.stageClose = Unique("StageClose", "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 4D 8B E1 49 8B F0 48 8B DA");
+        // Anchored 0x15 bytes in, on the frame setup, for the same walk back.
+        // Another mod hooking StageClose writes its jump over the first bytes,
+        // and a pattern starting at the entry then matched nowhere (#28). The
+        // full pattern stays as the fallback for builds this one has not seen.
+        const uintptr_t closeBody = UniqueAny("StageClose", {
+            "41 57 48 8B EC 48 81 EC 80 00 00 00 4D 8B E1 49 8B F0 48 8B DA",
+            "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 4D 8B E1 49 8B F0 48 8B DA"});
+        if (closeBody)
+        {
+            const uintptr_t entry = FunctionEntry(closeBody);
+            if (!entry || closeBody - entry > 0x40)
+                LOG_ERR("[addr] StageClose: the body at +%llX has no function entry near it", R(closeBody));
+            else
+            {
+                s.stageClose = entry;
+                if (entry != closeBody) LOG("[addr] StageClose entry +%llX", R(entry));
+            }
+        }
         s.inputBlockSet = Unique("InputBlockSet", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 44 88 44 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 41 0F B6 E8 4C 8B FA");
         s.eventManagerGlobal = Global("EventManager", "48 8B 1D ?? ?? ?? ?? 48 89 5C 24 78 48 8B 03 48 8B CB FF 50 08 90 0F B7 06 66 89 44 24 60", 7);
         s.actorManagerGlobal = Global("ActorManager", "48 8B 0D ?? ?? ?? ?? 48 8B 49 58 E8 ?? ?? ?? ?? 90 40 38 74 24 40 40 0F 94 C5 48 8D 05 ?? ?? ?? ??", 7);

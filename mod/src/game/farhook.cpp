@@ -127,10 +127,60 @@ namespace psm::farhook
         return true;
     }
 
+    // Where a jump at `at` goes, or 0 when the bytes there are not one of the
+    // shapes hooking libraries write over an entry: jmp rel32, jmp rel8,
+    // jmp [rip+disp] (MinHook's relay and most others), and mov rax or r11 to
+    // an address then jmp to it (this module's own shape, and a common one).
+    static uintptr_t JumpDest(uintptr_t at)
+    {
+        unsigned char b[13] = {};
+        if (!psm::mem::ReadBytes(at, b, sizeof b)) return 0;
+        if (b[0] == 0xE9) return at + 5 + *reinterpret_cast<int32_t*>(b + 1);
+        if (b[0] == 0xEB) return at + 2 + static_cast<int8_t>(b[1]);
+        if (b[0] == 0xFF && b[1] == 0x25)
+        {
+            uint64_t dest = 0;
+            return psm::mem::Read64(at + 6 + *reinterpret_cast<int32_t*>(b + 2), &dest) ? static_cast<uintptr_t>(dest) : 0;
+        }
+        uintptr_t dest = 0;
+        if (b[0] == 0x48 && b[1] == 0xB8 && b[10] == 0xFF && b[11] == 0xE0) { memcpy(&dest, b + 2, 8); return dest; }
+        if (b[0] == 0x49 && b[1] == 0xBB && b[10] == 0x41 && b[11] == 0xFF && b[12] == 0xE3) { memcpy(&dest, b + 2, 8); return dest; }
+        return 0;
+    }
+
+    // Another mod that hooked the same function first has put its jump over the
+    // entry, and stealing those bytes would either be refused or cut through
+    // its patch. Hook where the jump lands instead: callers reach this detour
+    // first, its original runs the other mod's detour, and that one still
+    // returns into the game's function through its own trampoline. Logs the
+    // module each hop lands in, so a report names the other mod.
+    static uintptr_t FollowHooks(const char* name, uintptr_t target)
+    {
+        for (int hop = 0; hop < 4; ++hop)
+        {
+            const uintptr_t dest = JumpDest(target);
+            if (!dest || !psm::mem::Executable(dest, 16)) return target;
+            HMODULE m = nullptr;
+            wchar_t path[MAX_PATH] = L"";
+            if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   reinterpret_cast<LPCWSTR>(dest), &m) && m)
+                GetModuleFileNameW(m, path, MAX_PATH);
+            const wchar_t* where = path[0] ? path : L"no module (a relay or trampoline page)";
+            if (hop == 0)
+                ::psm::Log::Write("note ", "[hook] %s: the entry at %p already jumps to %p in %ls, so another mod hooks it; hooking there so both run",
+                                  name ? name : "?", reinterpret_cast<void*>(target), reinterpret_cast<void*>(dest), where);
+            else
+                ::psm::Log::Write("note ", "[hook] %s: that jumps on to %p in %ls", name ? name : "?", reinterpret_cast<void*>(dest), where);
+            target = dest;
+        }
+        return target;
+    }
+
     bool Install(const char* name, uintptr_t target, void* detour, void** original, char* why, unsigned whyLen)
     {
         why[0] = 0;
         if (!target) { snprintf(why, whyLen, "no target"); return false; }
+        target = FollowHooks(name, target);
         if (g_n >= static_cast<int>(sizeof g_entries / sizeof g_entries[0]))
         { snprintf(why, whyLen, "hook table full"); return false; }
         const unsigned stolen = Measure(target, why, whyLen);
