@@ -1214,6 +1214,9 @@ namespace psm::storage
         if (!g_view || !g_selector) { LOG_ERR("[storage] out of memory"); return false; }
 
         // The open path must never run without the close hook and the frame tick.
+        // A failure backs out these four only: the size and stack hooks went in
+        // earlier and still have saves to apply to.
+        const int firstHook = farhook::Count();
         const bool ok = Hook("WarehouseHandler", A.warehouseHandler, hkHandler, &oHandler) &&
                         Hook("StageClose", A.stageClose, hkStageClose, &oStageClose) &&
                         Hook("InputBlockSet", A.inputBlockSet, hkInputBlock, &oInputBlock) &&
@@ -1221,7 +1224,7 @@ namespace psm::storage
         if (!ok)
         {
             LOG_ERR("[storage] Storage keys are off: a hook could not go in (see the line above). Another mod may have hooked the same place.");
-            farhook::RemoveAll();
+            farhook::RemoveFrom(firstHook);
             return false;
         }
         pad::Init();

@@ -249,11 +249,16 @@ namespace psm::farhook
 #endif
     }
 
-    void RemoveAll()
+    void RemoveFrom(int first)
     {
+        if (first < 0) first = 0;
         char why[64];
-        for (int i = g_n - 1; i >= 0; --i) WriteCode(g_entries[i].target, g_entries[i].orig, g_entries[i].stolen, why, sizeof why);
-        g_n = 0;
+        for (int i = g_n - 1; i >= first; --i) WriteCode(g_entries[i].target, g_entries[i].orig, g_entries[i].stolen, why, sizeof why);
+        if (first < g_n) g_n = first;
         // The trampoline page stays: a game thread may still be running through it.
     }
+
+    void RemoveAll() { RemoveFrom(0); }
+
+    int Count() { return g_n; }
 }

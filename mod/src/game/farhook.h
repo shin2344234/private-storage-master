@@ -14,6 +14,10 @@ namespace psm::farhook
     // original function). Returns false and fills `why` on failure.
     bool Install(const char* name, uintptr_t target, void* detour, void** original, char* why, unsigned whyLen);
     void RemoveAll();
+    // How many hooks are in, and removing only those installed after Count()
+    // returned `first`, so one feature can back out without taking the others.
+    int Count();
+    void RemoveFrom(int first);
 
     // Diagnostic builds: compares every installed hook's entry bytes with the
     // patch this module wrote, and logs each hook whose state changed since the
