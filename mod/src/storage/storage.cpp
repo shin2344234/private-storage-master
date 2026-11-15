@@ -1042,7 +1042,7 @@ namespace psm::storage
             bool keyWas[Settings::kStorages + 2] = {};   // the storages, then the dump key, then the block toggle
             DWORD since[Settings::kStorages] = {};
             bool held[Settings::kStorages] = {};
-            DWORD nextWindowCheck = 0;
+            ULONGLONG nextWindowCheck = 0;   // 64-bit, so it survives the 49.7-day wrap
             // 1.0.0 looked for one window class, found nothing on either game
             // build and said nothing, for 24 sessions. Missing it is worth an
             // error line, once, and finding it later is worth a note, once.
@@ -1061,7 +1061,7 @@ namespace psm::storage
 #ifdef PSM_DIAG
                 ++g_dLoops;
 #endif
-                if (now >= nextWindowCheck)
+                if (GetTickCount64() >= nextWindowCheck)
                 {
                     diag::Beat("finding the game windows");
                     const int showing = SubclassGameWindows();
@@ -1076,7 +1076,7 @@ namespace psm::storage
                         LOG_NOTE("[keys] found the game window after all; bound keys are hidden from the game now");
                         saidFound = true;
                     }
-                    nextWindowCheck = now + 500;
+                    nextWindowCheck = GetTickCount64() + 500;
                 }
 
                 if (!saidNoTick && now - pollStart > 120000 && !g_lastTick.load())

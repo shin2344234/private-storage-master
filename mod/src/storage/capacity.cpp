@@ -460,14 +460,17 @@ namespace psm::capacity
 
         DWORD WINAPI Worker(LPVOID)
         {
-            DWORD nextLearn = 0, nextSizes = 0;
+            // 64-bit deadlines: a 32-bit one set just before GetTickCount wraps
+            // at 49.7 days of uptime stays ahead of the clock for another 49.7.
+            ULONGLONG nextLearn = 0, nextSizes = 0;
             while (!g_stop.load())
             {
                 Sleep(100);
                 if (g_dump.exchange(false)) Dump();
                 const DWORD tick = GetTickCount();
-                if (tick - g_sizesWanted.load() < 3000 && tick >= nextSizes) { RefreshSizes(); nextSizes = tick + 1000; }
-                const DWORD now = GetTickCount();
+                const ULONGLONG tick64 = GetTickCount64();
+                if (tick - g_sizesWanted.load() < 3000 && tick64 >= nextSizes) { RefreshSizes(); nextSizes = tick64 + 1000; }
+                const ULONGLONG now = GetTickCount64();
                 if (now < nextLearn) continue;
                 nextLearn = now + 2000;
                 FlushLog();
