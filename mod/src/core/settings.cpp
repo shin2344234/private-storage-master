@@ -106,7 +106,9 @@ namespace psm::Settings
         bool ParseKey(const char* text, KeyBind& out)
         {
             out = KeyBind{};
-            if (IsNone(text)) return true;
+            // Not IsNone: a bare 0 is the 0 key, which KeyText writes as "0". An
+            // unbound key has always been written as None.
+            if (!*text || _stricmp(text, "none") == 0 || strcmp(text, "00") == 0) return true;
             char buf[64];
             strncpy_s(buf, text, _TRUNCATE);
             uint8_t mods = 0, vk = 0;
