@@ -278,6 +278,46 @@ def main():
         else:
             check("AutoStore", autostore_keys, auto_key, {"type": "bool", "default": defaults["autoStoreTo"][i]})
 
+    # ---------------------------------------------------------------- key lists
+    # INI Master offers only the keys a key setting's "keys" list names, so the
+    # list has to be exactly what KeyFromName parses: F1 to F24, a letter or
+    # digit, Numpad0 to Numpad9 and the names in kKeys. Every one of those is
+    # Bindable; Escape, mouse buttons, modifiers and the Windows keys are not in
+    # it. Aliases in kKeys (Ins, PgUp) count as the key they name.
+    table = must(r"const NamedKey kKeys\[\] = \{(.*?)\};", cpp, "kKeys", re.S).group(1)
+    name_to_vk = {n.lower(): vk for n, vk in re.findall(r'\{"(\w+)",\s*(VK_\w+)\}', table)}
+    plain = (["F%d" % n for n in range(1, 25)] + [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+             + [str(d) for d in range(10)] + ["Numpad%d" % d for d in range(10)])
+    accepted = set(name_to_vk.values()) | {p.lower() for p in plain}
+
+    def expand(entry):
+        m = re.fullmatch(r"([A-Za-z]*?)(\d+)-\1(\d+)", entry)
+        if m:
+            return ["%s%d" % (m.group(1), n) for n in range(int(m.group(2)), int(m.group(3)) + 1)]
+        m = re.fullmatch(r"([A-Z])-([A-Z])", entry)
+        if m:
+            return [chr(c) for c in range(ord(m.group(1)), ord(m.group(2)) + 1)]
+        return [entry]
+
+    for k, spec in sorted(main_keys.items()):
+        if spec.get("type") != "key":
+            continue
+        listed = spec.get("keys")
+        if not isinstance(listed, list):
+            errors.append("%s: no keys list, so INI Master offers keys the plugin refuses" % k)
+            continue
+        got = set()
+        for entry in listed:
+            for name in expand(entry):
+                vk = name_to_vk.get(name.lower(), name.lower())
+                if vk not in accepted:
+                    errors.append("%s: keys lists %r, which settings.cpp does not accept" % (k, name))
+                got.add(vk)
+        for vk in sorted(accepted - got):
+            errors.append("%s: keys leaves out %s, which settings.cpp accepts" % (k, vk))
+        if spec.get("modifiers") is not True:
+            errors.append("%s: modifiers should be true, since every key setting takes Ctrl, Shift and Alt" % k)
+
     # ---------------------------------------------------------------- nothing extra
     expected_main = {"Enabled", "DebugLog", "HideKeysWithModifier", "LeaveCapacityAlone", "CapacityDumpKey",
                       "HideKeysToggleKey", "PrivateStorageExpansions"}
