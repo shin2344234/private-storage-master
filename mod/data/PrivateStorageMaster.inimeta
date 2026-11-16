@@ -214,6 +214,25 @@
           "help": "Controller combo for Abyss gear storage. Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
           "order": 27
         },
+        "WeaponsPotKey": {
+          "label": "Weapon's Pot key",
+          "type": "key",
+          "format": "name",
+          "keys": ["F1-F24", "A-Z", "0-9", "Numpad0-Numpad9", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "Pause", "ScrollLock", "Up", "Down", "Left", "Right", "Space", "Tab", "Enter", "Backspace", "CapsLock", "NumLock", "Multiply", "Add", "Subtract", "Decimal", "Divide", "Semicolon", "Equals", "Comma", "Minus", "Period", "Slash", "Tilde", "LeftBracket", "Backslash", "RightBracket", "Quote"],
+          "modifiers": true,
+          "group": "Keys",
+          "default": "Ctrl+F11",
+          "help": "Opens the Weapon's Pot from MJ7L's Weapon's Pot mod from anywhere, and again closes it. Does nothing without that mod.",
+          "order": 28
+        },
+        "WeaponsPotPad": {
+          "label": "Weapon's Pot controller combo",
+          "type": "string",
+          "group": "Keys",
+          "default": "None",
+          "help": "Controller combo for the Weapon's Pot (MJ7L's Weapon's Pot mod). Xbox button names joined with +: every button but the last is held, the last is pressed. Names: A, B, X, Y, LB, RB, LS, RS, Up, Down, Left, Right, Start, Back. A PlayStation pad works through Steam Input or DS4Windows. Holding the combo for most of a second closes the open storage. None turns it off.",
+          "order": 29
+        },
 
         "CapacityDumpKey": {
           "label": "Capacity dump key",
@@ -474,6 +493,16 @@
           "false": "0",
           "help": "1 lets Abyss gear storage receive loot.",
           "order": 17
+        },
+        "AutoStoreWeaponsPot": {
+          "label": "Store loot in the Weapon's Pot",
+          "type": "bool",
+          "group": "Storages",
+          "default": "1",
+          "true": "1",
+          "false": "0",
+          "help": "1 sends weapons to the Weapon's Pot from MJ7L's Weapon's Pot mod, before every other storage. It takes weapons only. Without that mod installed this does nothing.",
+          "order": 19
         },
         "AutoStoreDefaultsVersion": {
           "label": "Storage defaults version",

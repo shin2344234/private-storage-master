@@ -50,6 +50,13 @@ namespace psm::Settings
     // Camp Provisions holds packaged trade goods, and the bag's move to it converts
     // them, so it is never a place loot is stored.
     inline constexpr int kTownWarehouse = 7;
+    // The Weapon's Pot, from MJ7L's Weapon's Pot mod: its own storage record, made
+    // by that mod, that takes weapons only. It is an auto-store target after the
+    // nine above, and only while its record is in the game. Its key and combo are
+    // their own settings (WeaponsPotKey, WeaponsPotPad) and its size belongs to the
+    // Weapon's Pot mod, so it is not one of kStorages and no array above grows.
+    inline constexpr int kWeaponsPot = kStorages;
+    inline constexpr const char* kWeaponsPotRecord = "MJ7L_WeaponsPot";
     inline constexpr int kNeverMoveMax = 64;
     inline constexpr int kNeverMoveVersion = 2;   // see Values::autoStoreNeverMoveVersion
     inline constexpr int kAutoStoreDefaultsVersion = 2;   // see Values::autoStoreDefaultsVersion
@@ -74,6 +81,10 @@ namespace psm::Settings
         // Not in PsmSettings: the API struct shipped with 1.0.0 and keeps its size,
         // and FromC starts from the current values, so Master Looter keeps it too.
         KeyBind hideKeysToggleKey;
+        // The Weapon's Pot (MJ7L's Weapon's Pot mod): WeaponsPotKey and WeaponsPotPad open it
+        // from anywhere, the same as a storage key. Only works with that mod installed.
+        KeyBind weaponsPotKey;
+        PadBind weaponsPotPad;
 
         bool leaveCapacityAlone = false;
         // Slots per storage; 0 keeps the game's size. Storage 0 (Private Storage)
@@ -95,6 +106,10 @@ namespace psm::Settings
         // so every fish Master Looter caught went there, quest hand-ins included
         // (LuxDragon's burbots, 14 November).
         bool autoStoreTo[kStorages] = {false, true, false, true, true, true, false, false, true};
+        // AutoStoreWeaponsPot: weapons go to the Weapon's Pot first, when that mod is
+        // installed. On by default: the Weapon's Pot takes nothing but weapons, and
+        // installing it is asking for somewhere to put them.
+        bool autoStoreWeaponsPot = true;
         // Move the amount just picked up, not the whole stack, so what the player
         // already carried stays in the bag.
         bool autoStoreOnlyGained = true;

@@ -37,6 +37,10 @@ namespace psm::pad
                 const Settings::PadBind& p = v.pad[i];
                 if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;
             }
+            {
+                const Settings::PadBind& p = v.weaponsPotPad;
+                if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;
+            }
             g_hiding.store(hiding);
             uint16_t mask = hiding;
             if (g_hideB.load())
@@ -116,6 +120,7 @@ namespace psm::pad
         }
         bool anyCombo = false;
         for (int i = 0; i < Settings::kStorages; ++i) anyCombo |= Settings::Get().pad[i].press != 0;
+        anyCombo |= Settings::Get().weaponsPotPad.press != 0;
         if (!anyCombo) return true;
 
         g_slot = FindImportSlot();
