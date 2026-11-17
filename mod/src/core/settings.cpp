@@ -467,7 +467,7 @@ namespace psm::Settings
                 else if (_stricmp(key, "AutoStoreNeverMoveVersion") == 0) { out.autoStoreNeverMoveVersion = atoi(val); sawNeverMoveVersion = true; }
                 else if (_stricmp(key, "AutoStoreDefaultsVersion") == 0) { out.autoStoreDefaultsVersion = atoi(val); sawDefaultsVersion = true; }
                 else if (_stricmp(key, "AutoStoreWeaponsPot") == 0) out.autoStoreWeaponsPot = atoi(val) != 0;
-            else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
+                else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
                     KeyBind k;
@@ -749,7 +749,8 @@ namespace psm::Settings
         }
         ParseKey("Ctrl+F12", v.dumpKey);
         ParseKey("Ctrl+F10", v.hideKeysToggleKey);   // F10 is in the game's debug group only
-        ParseKey("Ctrl+F11", v.weaponsPotKey);       // F11 was the one free F key
+        // The Weapon's Pot key starts unbound: Ctrl+F11 is Steam's recording key, and
+        // the player picks one in Master Looter or the ini.
         return v;
     }
 
@@ -826,7 +827,19 @@ namespace psm::Settings
                 return 0;
             }
             Clamp(v);
+            // The Weapon's Pot's key and combo give way to every other binding. When one
+            // is turned off here, the caller is told why (Master Looter shows it).
+            const KeyBind wpKey = v.weaponsPotKey;
+            const PadBind wpPad = v.weaponsPotPad;
             Deduplicate(v);
+            if (why && whyLen)
+            {
+                char t[32];
+                if (wpKey.vk && !v.weaponsPotKey.vk)
+                    snprintf(why, whyLen, "%s is also another key, so the Weapon's Pot key is turned off", KeyText(wpKey, t, sizeof t));
+                else if (wpPad.press && !v.weaponsPotPad.press)
+                    snprintf(why, whyLen, "%s is also another combo, so the Weapon's Pot combo is turned off", PadText(wpPad, t, sizeof t));
+            }
             v.imported = Get().imported;
             Publish(v);
             return WriteIni(v) ? 1 : 2;

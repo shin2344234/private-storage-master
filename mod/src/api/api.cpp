@@ -288,11 +288,12 @@ PSM_EXPORT int PsmGetWeaponsPot(PsmWeaponsPot* out, int defaults)
     out->installed = psm::inv::IndexByName(psm::Settings::kWeaponsPotRecord) >= 0;
     out->key = {v.weaponsPotKey.vk, v.weaponsPotKey.mods};
     out->pad = {v.weaponsPotPad.hold, v.weaponsPotPad.press};
-    out->slots = 1400;
+    // The size is the Weapon's Pot mod's own setting: the defaults leave it alone (0).
+    out->slots = 0;
     out->liveUsed = out->liveCapacity = -1;
     if (const auto get = reinterpret_cast<int (*)(int*, int*, int*)>(WeaponsPotFn("WP_GetSize")))
     {
-        int setting = 1400;
+        int setting = 0;
         get(&setting, &out->liveUsed, &out->liveCapacity);
         if (!defaults) out->slots = setting;
     }
@@ -307,6 +308,15 @@ PSM_EXPORT int PsmApplyWeaponsPot(const PsmWeaponsPot* in, char* why, int whyLen
         if (why && whyLen > 0) snprintf(why, whyLen, "Weapon's Pot struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
         return 0;
     }
+    const auto change = [in](Values& v)
+    {
+        v.autoStoreWeaponsPot = in->autoStore != 0;
+        v.weaponsPotKey = {in->key.vk, static_cast<uint8_t>(in->key.mods & 7)};
+        v.weaponsPotPad = {in->pad.hold, in->pad.press};
+    };
+    if (!psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0)) return 0;
+    // The size last, once the rest is saved, so a refusal never leaves it half applied.
+    // 0 leaves it as it is.
     if (in->slots > 0)
     {
         int setting = 0, used = 0, cap = 0;
@@ -319,13 +329,7 @@ PSM_EXPORT int PsmApplyWeaponsPot(const PsmWeaponsPot* in, char* why, int whyLen
             return 0;
         }
     }
-    const auto change = [in](Values& v)
-    {
-        v.autoStoreWeaponsPot = in->autoStore != 0;
-        v.weaponsPotKey = {in->key.vk, static_cast<uint8_t>(in->key.mods & 7)};
-        v.weaponsPotPad = {in->pad.hold, in->pad.press};
-    };
-    return psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0) ? 1 : 0;
+    return 1;
 }
 
 PSM_EXPORT int PsmDepositResults(PsmDepositResult* out, int max)

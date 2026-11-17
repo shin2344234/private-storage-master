@@ -82,7 +82,8 @@ namespace psm::Settings
         // and FromC starts from the current values, so Master Looter keeps it too.
         KeyBind hideKeysToggleKey;
         // The Weapon's Pot (MJ7L's Weapon's Pot mod): WeaponsPotKey and WeaponsPotPad open it
-        // from anywhere, the same as a storage key. Only works with that mod installed.
+        // from anywhere, the same as a storage key. Both start unbound. Only works with that
+        // mod installed.
         KeyBind weaponsPotKey;
         PadBind weaponsPotPad;
 

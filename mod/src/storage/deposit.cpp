@@ -258,6 +258,24 @@ namespace psm::deposit
 
         // Offers the job's item to each storage from job.nextOrder on. True when one
         // took the request; the job then waits for that storage to show it.
+        // A weapon on its way into the Weapon's Pot when play stops being free (a menu,
+        // a load, a storage opening) or the bag cannot be read: the swap is undone at
+        // once, so no screen ever sees the Weapon's Pot answering as the Kuku Pot, and
+        // the send is dropped like a refusal. What still arrives is counted by the late
+        // check (SettleLate). The item is not remembered as refused, since the Weapon's
+        // Pot did not say no, so it is offered there again once play is free.
+        void WpInterrupted(Job& j, Tick64 now)
+        {
+            LOG("[deposit] item %u: play left free play with it on its way into the Weapon's Pot; the swap is undone", j.item);
+            WpRelease();
+            j.lateStorage = j.storage;
+            j.lateTarget = j.target;
+            j.lateBefore = j.targetBefore;
+            j.lateAmount = j.amount;
+            j.phase = Phase::Find;
+            j.waitingSince = now;
+        }
+
         bool AnyInFlight()
         {
             for (int i = 0; i < g_jobCount; ++i)
@@ -492,6 +510,8 @@ namespace psm::deposit
             if (g_broken) { End(j, kOff); continue; }
             if (j.phase == Phase::Confirm)
             {
+                // The Weapon's Pot's swap never waits out a menu or a load.
+                if (j.storage == Settings::kWeaponsPot && (!canMove || !bag)) { WpInterrupted(j, now); continue; }
                 // A load screen or a menu does not count against the wait.
                 if (!bag) { j.sentAt = now; continue; }
                 Confirm(j, now);

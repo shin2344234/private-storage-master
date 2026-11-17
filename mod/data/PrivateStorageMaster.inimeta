@@ -221,8 +221,8 @@
           "keys": ["F1-F24", "A-Z", "0-9", "Numpad0-Numpad9", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "Pause", "ScrollLock", "Up", "Down", "Left", "Right", "Space", "Tab", "Enter", "Backspace", "CapsLock", "NumLock", "Multiply", "Add", "Subtract", "Decimal", "Divide", "Semicolon", "Equals", "Comma", "Minus", "Period", "Slash", "Tilde", "LeftBracket", "Backslash", "RightBracket", "Quote"],
           "modifiers": true,
           "group": "Keys",
-          "default": "Ctrl+F11",
-          "help": "Opens the Weapon's Pot from MJ7L's Weapon's Pot mod from anywhere, and again closes it. Does nothing without that mod.",
+          "default": "None",
+          "help": "Opens the Weapon's Pot from MJ7L's Weapon's Pot mod from anywhere, and again closes it. None by default, so pick your own key. Does nothing without that mod.",
           "order": 28
         },
         "WeaponsPotPad": {

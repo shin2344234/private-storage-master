@@ -321,7 +321,7 @@ def main():
             errors.append("%s: modifiers should be true, since every key setting takes Ctrl, Shift and Alt" % k)
 
     # ---------------------------------------------------------------- nothing extra
-    check("PrivateStorageMaster", main_keys, "WeaponsPotKey", {"type": "key", "default": "Ctrl+F11"})
+    check("PrivateStorageMaster", main_keys, "WeaponsPotKey", {"type": "key", "default": "None"})
     check("PrivateStorageMaster", main_keys, "WeaponsPotPad", {"type": "string", "default": "None"})
     expected_main = {"Enabled", "DebugLog", "HideKeysWithModifier", "LeaveCapacityAlone", "CapacityDumpKey",
                       "HideKeysToggleKey", "PrivateStorageExpansions", "WeaponsPotKey", "WeaponsPotPad"}

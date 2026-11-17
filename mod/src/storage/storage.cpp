@@ -123,7 +123,7 @@ namespace psm::storage
         constexpr uint64_t kOwnIdBase = 900000000;
         uint64_t g_nextId = kOwnIdBase;
         SsNode* g_view = nullptr, *g_selector = nullptr;
-        SsNode* g_itemText[Settings::kStorages + 1][8] = {};   // + the Weapon's Pot   // per chest: icon, title hash, modal hash, extra, setInventory, title
+        SsNode* g_itemText[Settings::kStorages + 1][8] = {};   // per chest (and the Weapon's Pot): icon, title hash, modal hash, extra, setInventory, title
 
         // ------------------------------------------------------------ shared state
         // Requests from the keyboard and pad, run on the main thread by the mode switch.
@@ -402,7 +402,7 @@ namespace psm::storage
             if (chest == Settings::kWeaponsPot)
             {
                 const WpScreen w = WpScreenLink();
-                if (!w.begin) { LOG_NOTE("[storage] Weapon's Pot not opened: the Weapon's Pot mod (WeaponsPot.asi 1.5 or later) is not loaded"); return false; }
+                if (!w.begin) { LOG_NOTE("[storage] Weapon's Pot not opened: the Weapon's Pot mod (WeaponsPot.asi from Weapon's Pot 1.1 or later) is not loaded"); return false; }
                 if (!w.begin()) { LOG_NOTE("[storage] Weapon's Pot not opened: the Weapon's Pot plugin is busy (its own screen or an auto-store)"); return false; }
                 g_wpScreen = true;
             }
@@ -498,7 +498,7 @@ namespace psm::storage
             if (lastMode != mode || lastScreen != screen)
                 LOG("[diag] frame: mode %d -> %u, screen 0x%02X -> 0x%02X, free play %s", lastMode, mode, lastScreen & 0xFF, screen,
                     g_freePlay.load() ? "yes" : "no");
-            if (act >= 0) LOG("[diag] frame picked up the key request for %s", act < Settings::kStorages ? kChests[act].label : "?");
+            if (act >= 0) LOG("[diag] frame picked up the key request for %s", act <= Settings::kWeaponsPot ? kChests[act].label : "?");
 #endif
             g_lastTick = GetTickCount();
             // Loot moves only in free play, with no storage open or about to open,
@@ -939,7 +939,7 @@ namespace psm::storage
                 ++d.beats, front ? "yes" : "NO", paused ? "YES " : "no, ", paused ? pauseLeft : 0L, ModsText(mods, mt, sizeof mt),
                 g_dTicks.exchange(0), last ? static_cast<long>(now - last) : -1L, g_dMode.load(), g_dScreen.load() & 0xFF,
                 g_freePlay.load() ? "yes" : "no", open >= 0 ? kChests[open].label : "none",
-                pending >= 0 && pending < Settings::kStorages ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
+                pending >= 0 && pending <= Settings::kWeaponsPot ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
                 g_hidingKeys.load() ? "yes" : "no");
             LOG("[diag] heartbeat %d: window procedure saw %u messages, %u key downs, %u WM_INPUT, kept %u key messages from the game; %ld faults logged",
                 d.beats, g_dWndMsgs.exchange(0), g_dWndKeys.exchange(0), g_dWndInput.exchange(0), g_dSwallowed.exchange(0), diag::FaultsLogged());
