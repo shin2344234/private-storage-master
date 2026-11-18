@@ -48,6 +48,12 @@ namespace psm::deposit
             }
             return l;
         }
+        // Every call this mod makes into WeaponsPot.asi. A Weapon's Pot without all of
+        // them (older than 1.1) counts as not installed.
+        const char* const kWpCalls[] = {"WP_Accepts", "WP_AutoStoreBegin", "WP_AutoStoreEnd", "WP_ScreenBegin",
+                                        "WP_ScreenEnd", "WP_ScreenTitle", "WP_GetSize", "WP_SetSize"};
+        std::atomic<bool> g_wpInstalled{false};
+        std::atomic<ULONGLONG> g_wpCheckedAt{0};
         bool g_wpSwapped = false;   // a weapon is on its way into the Weapon's Pot; nothing else is sent meanwhile
         void WpRelease()
         {
@@ -314,7 +320,7 @@ namespace psm::deposit
                     // Only a weapon, and only with the Weapon's Pot plugin loaded. It waits
                     // for any other move still on its way, so nothing else meets the swap.
                     const WpLink w = WeaponsPotLink();
-                    if (!w.accepts || !w.accepts(j.item)) continue;
+                    if (!WeaponsPotInstalled() || !w.accepts || !w.accepts(j.item)) continue;
                     if (AnyInFlight()) return false;
                     if (!w.begin()) { LOG("[deposit] item %u -> Weapon's Pot: busy (its screen is open), tried again later", j.item); return false; }
                     swapped = g_wpSwapped = true;
@@ -425,6 +431,32 @@ namespace psm::deposit
     // Moves are sent from the storage frame tick, so without its hooks nothing
     // queued would ever run or report.
     bool Available() { return inv::CanMove() && storage::Ready() && !g_broken; }
+
+    bool WeaponsPotInstalled()
+    {
+        const ULONGLONG now = GetTickCount64();
+        const ULONGLONG at = g_wpCheckedAt.load(std::memory_order_relaxed);
+        if (at && now - at < 2000) return g_wpInstalled.load(std::memory_order_relaxed);
+        bool ok = inv::IndexByName(Settings::kWeaponsPotRecord) >= 0;
+        const HMODULE h = ok ? GetModuleHandleW(L"WeaponsPot.asi") : nullptr;
+        ok = ok && h;
+        for (const char* name : kWpCalls)
+            if (ok && !GetProcAddress(h, name)) ok = false;
+        g_wpInstalled.store(ok, std::memory_order_relaxed);
+        g_wpCheckedAt.store(now ? now : 1, std::memory_order_relaxed);
+        return ok;
+    }
+
+    void EndWeaponsPotSend()
+    {
+        const Tick64 now = GetTickCount64();
+        for (int i = 0; i < g_jobCount; ++i)
+        {
+            Job& j = g_jobs[i];
+            if (j.item != 0xFFFF && j.phase == Phase::Confirm && j.storage == Settings::kWeaponsPot) WpInterrupted(j, now);
+        }
+        WpRelease();
+    }
 
     bool FreePlayNow() { return storage::PlayState() == storage::Play::Free && storage::OpenStorage() < 0; }
 

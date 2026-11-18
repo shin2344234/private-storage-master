@@ -9,6 +9,7 @@
 #include "core/diag.h"
 #include "core/log.h"
 #include "core/settings.h"
+#include "storage/deposit.h"
 #include "game/mem.h"
 
 namespace psm::pad
@@ -37,6 +38,7 @@ namespace psm::pad
                 const Settings::PadBind& p = v.pad[i];
                 if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;
             }
+            if (deposit::WeaponsPotInstalled())
             {
                 const Settings::PadBind& p = v.weaponsPotPad;
                 if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;

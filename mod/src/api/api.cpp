@@ -285,7 +285,7 @@ PSM_EXPORT int PsmGetWeaponsPot(PsmWeaponsPot* out, int defaults)
     memset(out, 0, sizeof *out);
     out->size = sizeof *out;
     out->autoStore = v.autoStoreWeaponsPot;
-    out->installed = psm::inv::IndexByName(psm::Settings::kWeaponsPotRecord) >= 0;
+    out->installed = psm::deposit::WeaponsPotInstalled();   // the storage record and every WP_* call
     out->key = {v.weaponsPotKey.vk, v.weaponsPotKey.mods};
     out->pad = {v.weaponsPotPad.hold, v.weaponsPotPad.press};
     // The size is the Weapon's Pot mod's own setting: the defaults leave it alone (0).

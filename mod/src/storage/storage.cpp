@@ -481,7 +481,12 @@ namespace psm::storage
             if (g_orphan && mode == 4) SettleOrphan(pm, screen);
 
             const int act = g_pending.exchange(kActNone);
-            if (act >= 0 && act <= Settings::kWeaponsPot) { g_switchTo = -1; Request(pm, act); }
+            if (act >= 0 && act <= Settings::kWeaponsPot)
+            {
+                g_switchTo = -1;
+                deposit::EndWeaponsPotSend();   // no storage opens while the Kuku Pot answers as the Weapon's Pot
+                Request(pm, act);
+            }
 
             if (g_closeRequested.exchange(false) && g_open.load()) Close(pm, "Esc or B");
 
@@ -680,7 +685,7 @@ namespace psm::storage
                 if (v.key[i].vk == vk && v.key[i].mods == mods) return i;
             if (v.dumpKey.vk == vk && v.dumpKey.mods == mods) return -2;
             if (v.hideKeysToggleKey.vk == vk && v.hideKeysToggleKey.mods == mods) return -3;
-            if (v.weaponsPotKey.vk == vk && v.weaponsPotKey.mods == mods) return Settings::kWeaponsPot;
+            if (v.weaponsPotKey.vk == vk && v.weaponsPotKey.mods == mods && deposit::WeaponsPotInstalled()) return Settings::kWeaponsPot;
             return -1;
         }
 
@@ -693,7 +698,7 @@ namespace psm::storage
             if (v.hideKeysToggleKey.vk && v.hideKeysToggleKey.mods == mods) return true;
             for (int i = 0; i < Settings::kStorages; ++i)
                 if (v.key[i].vk && v.key[i].mods == mods) return true;
-            if (v.weaponsPotKey.vk && v.weaponsPotKey.mods == mods) return true;
+            if (v.weaponsPotKey.vk && v.weaponsPotKey.mods == mods && deposit::WeaponsPotInstalled()) return true;
             return false;
         }
 
@@ -1185,7 +1190,7 @@ namespace psm::storage
                     // The Weapon's Pot key.
                     static bool wpKeyWas = false;
                     const Settings::KeyBind& k = v.weaponsPotKey;
-                    const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk);
+                    const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk) && deposit::WeaponsPotInstalled();
                     if (down && !wpKeyWas && !paused)
                     {
                         char t[32];
@@ -1234,7 +1239,7 @@ namespace psm::storage
                     static bool wpWas = false, wpHeld = false;
                     static DWORD wpSince = 0;
                     const Settings::PadBind& p = v.weaponsPotPad;
-                    const bool down = p.press && (buttons & p.press) && (buttons & p.hold) == p.hold;
+                    const bool down = p.press && (buttons & p.press) && (buttons & p.hold) == p.hold && deposit::WeaponsPotInstalled();
                     if (down && !wpWas)
                     {
                         wpSince = now;
