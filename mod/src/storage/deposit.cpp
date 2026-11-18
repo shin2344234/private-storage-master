@@ -22,6 +22,46 @@ namespace psm::deposit
         // which takes almost anything, is last.
         constexpr int kOrder[] = {4, 8, 1, 3, 6, 5, 2, 0};
         constexpr int kOrderCount = static_cast<int>(sizeof kOrder / sizeof kOrder[0]);
+        // Job::nextOrder runs over kOrderCount + 1 places: place 0 is the Weapon's Pot
+        // (MJ7L's Weapon's Pot mod), offered first and only while its storage record is
+        // in the game. It takes weapons only, and it should get them before the Abyss
+        // gear storage, which also takes the Fire Sticks. Places 1.. are kOrder.
+        constexpr int kPlaces = kOrderCount + 1;
+        int StorageAt(int place) { return place == 0 ? Settings::kWeaponsPot : kOrder[place - 1]; }
+        const char* RecordOf(int st) { return st == Settings::kWeaponsPot ? Settings::kWeaponsPotRecord : inv::kRecordNames[st]; }
+
+        // MJ7L's Weapon's Pot plugin (WeaponsPot.asi). Its pot screen stows a weapon by
+        // letting the Weapon's Pot answer as the Kuku Pot for a moment, so the game's own
+        // Kuku Pot move puts it there; a direct move to the Weapon's Pot's storage is
+        // refused by the game's server side. A weapon is stored the same way here: the
+        // plugin's Begin, the ordinary bag -> Kuku move, wait until it has arrived, End.
+        struct WpLink { int (*accepts)(uint16_t); int (*begin)(); void (*end)(); };
+        WpLink WeaponsPotLink()
+        {
+            WpLink l{};
+            if (const HMODULE h = GetModuleHandleW(L"WeaponsPot.asi"))
+            {
+                l.accepts = reinterpret_cast<int (*)(uint16_t)>(GetProcAddress(h, "WP_Accepts"));
+                l.begin = reinterpret_cast<int (*)()>(GetProcAddress(h, "WP_AutoStoreBegin"));
+                l.end = reinterpret_cast<void (*)()>(GetProcAddress(h, "WP_AutoStoreEnd"));
+                if (!l.accepts || !l.begin || !l.end) l = WpLink{};
+            }
+            return l;
+        }
+        // Every call this mod makes into WeaponsPot.asi. A Weapon's Pot without all of
+        // them (older than 1.1) counts as not installed.
+        const char* const kWpCalls[] = {"WP_Accepts", "WP_AutoStoreBegin", "WP_AutoStoreEnd", "WP_ScreenBegin",
+                                        "WP_ScreenEnd", "WP_ScreenTitle", "WP_GetSize", "WP_SetSize"};
+        std::atomic<bool> g_wpInstalled{false};
+        std::atomic<ULONGLONG> g_wpCheckedAt{0};
+        bool g_wpSwapped = false;   // a weapon is on its way into the Weapon's Pot; nothing else is sent meanwhile
+        void WpRelease()
+        {
+            if (!g_wpSwapped) return;
+            const WpLink w = WeaponsPotLink();
+            if (w.end) w.end();
+            g_wpSwapped = false;
+        }
         constexpr int kCollecting = 4;
 
         // Times are GetTickCount64, so nothing here wraps and a zero deadline is in the past.
@@ -107,7 +147,7 @@ namespace psm::deposit
 
         // Per storage: full until this tick. Per item and storage: the server refused
         // it once this session, so it is not offered there again.
-        Tick64 g_fullUntil[Settings::kStorages] = {};
+        Tick64 g_fullUntil[Settings::kStorages + 1] = {};   // + the Weapon's Pot
         struct Refused { uint16_t item; int8_t storage; };
         constexpr int kRefusedMax = 256;
         Refused g_refused[kRefusedMax];
@@ -224,8 +264,34 @@ namespace psm::deposit
 
         // Offers the job's item to each storage from job.nextOrder on. True when one
         // took the request; the job then waits for that storage to show it.
+        // A weapon on its way into the Weapon's Pot when play stops being free (a menu,
+        // a load, a storage opening) or the bag cannot be read: the swap is undone at
+        // once, so no screen ever sees the Weapon's Pot answering as the Kuku Pot, and
+        // the send is dropped like a refusal. What still arrives is counted by the late
+        // check (SettleLate). The item is not remembered as refused, since the Weapon's
+        // Pot did not say no, so it is offered there again once play is free.
+        void WpInterrupted(Job& j, Tick64 now)
+        {
+            LOG("[deposit] item %u: play left free play with it on its way into the Weapon's Pot; the swap is undone", j.item);
+            WpRelease();
+            j.lateStorage = j.storage;
+            j.lateTarget = j.target;
+            j.lateBefore = j.targetBefore;
+            j.lateAmount = j.amount;
+            j.phase = Phase::Find;
+            j.waitingSince = now;
+        }
+
+        bool AnyInFlight()
+        {
+            for (int i = 0; i < g_jobCount; ++i)
+                if (g_jobs[i].item != 0xFFFF && g_jobs[i].phase == Phase::Confirm) return true;
+            return false;
+        }
+
         bool Send(Job& j, const Bag& b, const Settings::Values& v, Tick64 now)
         {
+            if (g_wpSwapped) return false;   // a weapon is on its way into the Weapon's Pot
             if (SettleLate(j)) return false;
             uint32_t slot = 0;
             inv::Slot s;
@@ -241,16 +307,33 @@ namespace psm::deposit
             const bool part = v.autoStoreOnlyGained || j.debug;
             const int64_t amount = part && j.left < s.count ? j.left : s.count;
 
-            for (; j.nextOrder < kOrderCount; ++j.nextOrder)
+            for (; j.nextOrder < kPlaces; ++j.nextOrder)
             {
-                const int st = kOrder[j.nextOrder];
-                if (!v.autoStoreTo[st] || WasRefused(j.item, st)) continue;
+                const int st = StorageAt(j.nextOrder);
+                const bool on = st == Settings::kWeaponsPot ? v.autoStoreWeaponsPot : v.autoStoreTo[st];
+                if (!on || WasRefused(j.item, st)) continue;
                 if (g_fullUntil[st] > now) { j.sawFull = true; continue; }
-                const int idx = inv::IndexByName(inv::kRecordNames[st]);
+                bool swapped = false;
+                int idx = -1;
+                if (st == Settings::kWeaponsPot)
+                {
+                    // Only a weapon, and only with the Weapon's Pot plugin loaded. It waits
+                    // for any other move still on its way, so nothing else meets the swap.
+                    const WpLink w = WeaponsPotLink();
+                    if (!WeaponsPotInstalled() || !w.accepts || !w.accepts(j.item)) continue;
+                    if (AnyInFlight()) return false;
+                    if (!w.begin()) { LOG("[deposit] item %u -> Weapon's Pot: busy (its screen is open), tried again later", j.item); return false; }
+                    swapped = g_wpSwapped = true;
+                    idx = inv::IndexByName("Kuku");   // the Weapon's Pot answers as the Kuku Pot now
+                }
+                else idx = inv::IndexByName(RecordOf(st));
                 const uintptr_t target = idx >= 0 ? inv::BucketByIndex(b.holder, static_cast<uint16_t>(idx)) : 0;
                 const int mi = target ? inv::MoveIndex(b.record, static_cast<uint16_t>(b.index), static_cast<uint16_t>(idx)) : -1;
                 const int64_t before = target ? inv::ItemTotal(target, j.item) : -1;
-                if (mi < 0 || before < 0) continue;
+                if (swapped)
+                    LOG("[deposit] item %u -> Weapon's Pot (by the Kuku Pot move): bag %s, route %d, holds %lld", j.item,
+                             target ? "found" : "MISSING", mi, static_cast<long long>(before));
+                if (mi < 0 || before < 0) { if (swapped) WpRelease(); continue; }
                 int64_t send = amount;
                 // The client check does not test the Collectibles Chest's one of each
                 // (R5, probe session 1). Offer it exactly one, and only when the chest
@@ -265,8 +348,14 @@ namespace psm::deposit
                                static_cast<uint16_t>(slot), static_cast<uint32_t>(mi)))
                 {
                     LOG_ERR("[deposit] the game's move function raised an exception; auto-store is off until the game restarts");
+                    if (swapped) WpRelease();
                     g_broken = true;
                     return false;
+                }
+                if (swapped)
+                {
+                    LOG("[deposit] item %u -> Weapon's Pot: the game answered %s (0x%08X)", j.item, inv::ErrName(err), err);
+                    if (err != inv::kErrNone) WpRelease();
                 }
                 if (err == inv::kErrNone)
                 {
@@ -312,12 +401,14 @@ namespace psm::deposit
                 j.waitingSince = now;
                 // Whole stacks move once. With only what was picked up, more may be
                 // left when the pickup spread over two stacks; look for it.
+                if (j.storage == Settings::kWeaponsPot) WpRelease();
                 if (j.left <= 0 || !Settings::Get().autoStoreOnlyGained || j.debug) End(j, kStored);
                 return;
             }
             if (now - j.sentAt <= kRefusedAfterMs || j.framesSinceSent < kRefusedAfterFrames) return;
             // The client check passed but nothing arrived: the server said no.
             LOG("[deposit] item %u: %s took the request but the server kept the item in the bag", j.item, Settings::StorageLabel(j.storage));
+            if (j.storage == Settings::kWeaponsPot) WpRelease();
             RememberRefused(j.item, j.storage);
             j.lateStorage = j.storage;
             j.lateTarget = j.target;
@@ -340,6 +431,32 @@ namespace psm::deposit
     // Moves are sent from the storage frame tick, so without its hooks nothing
     // queued would ever run or report.
     bool Available() { return inv::CanMove() && storage::Ready() && !g_broken; }
+
+    bool WeaponsPotInstalled()
+    {
+        const ULONGLONG now = GetTickCount64();
+        const ULONGLONG at = g_wpCheckedAt.load(std::memory_order_relaxed);
+        if (at && now - at < 2000) return g_wpInstalled.load(std::memory_order_relaxed);
+        bool ok = inv::IndexByName(Settings::kWeaponsPotRecord) >= 0;
+        const HMODULE h = ok ? GetModuleHandleW(L"WeaponsPot.asi") : nullptr;
+        ok = ok && h;
+        for (const char* name : kWpCalls)
+            if (ok && !GetProcAddress(h, name)) ok = false;
+        g_wpInstalled.store(ok, std::memory_order_relaxed);
+        g_wpCheckedAt.store(now ? now : 1, std::memory_order_relaxed);
+        return ok;
+    }
+
+    void EndWeaponsPotSend()
+    {
+        const Tick64 now = GetTickCount64();
+        for (int i = 0; i < g_jobCount; ++i)
+        {
+            Job& j = g_jobs[i];
+            if (j.item != 0xFFFF && j.phase == Phase::Confirm && j.storage == Settings::kWeaponsPot) WpInterrupted(j, now);
+        }
+        WpRelease();
+    }
 
     bool FreePlayNow() { return storage::PlayState() == storage::Play::Free && storage::OpenStorage() < 0; }
 
@@ -425,6 +542,8 @@ namespace psm::deposit
             if (g_broken) { End(j, kOff); continue; }
             if (j.phase == Phase::Confirm)
             {
+                // The Weapon's Pot's swap never waits out a menu or a load.
+                if (j.storage == Settings::kWeaponsPot && (!canMove || !bag)) { WpInterrupted(j, now); continue; }
                 // A load screen or a menu does not count against the wait.
                 if (!bag) { j.sentAt = now; continue; }
                 Confirm(j, now);
@@ -448,6 +567,8 @@ namespace psm::deposit
             if (Send(j, b, v, now)) ++sends;
         }
         Compact();
+        // A swap with no Weapon's Pot move on its way any more (a job dropped) is undone.
+        if (g_wpSwapped) { bool any = false; for (int i = 0; i < g_jobCount; ++i) any |= g_jobs[i].phase == Phase::Confirm && g_jobs[i].storage == Settings::kWeaponsPot; if (!any) WpRelease(); }
     }
 
     int TakeResults(Result* out, int max)

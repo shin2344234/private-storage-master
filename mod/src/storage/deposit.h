@@ -47,6 +47,15 @@ namespace psm::deposit
     // hook is in, so deposits can work at all.
     bool Available();
 
+    // The Weapon's Pot (MJ7L's Weapon's Pot mod) is usable: its storage record is in
+    // the game and WeaponsPot.asi has every call this mod uses. An older Weapon's Pot
+    // has the record but not the calls. Any thread; the answer is kept for two seconds.
+    bool WeaponsPotInstalled();
+    // Game thread. A Weapon's Pot send still on its way is ended the way leaving free
+    // play ends it (the swap is undone), so no storage ever opens with the Kuku Pot
+    // answering as the Weapon's Pot. Called before a storage key request is handled.
+    void EndWeaponsPotSend();
+
     // Test builds only (PSM_DEPOSIT_TEST_KEY). Ctrl+F11 with DebugLog=1: deposit half of the next bag stack, through the
     // same path Master Looter uses, ignoring only the AutoStore master switch.
     void DebugNextBagStack();

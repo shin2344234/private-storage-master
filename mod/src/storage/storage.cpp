@@ -86,7 +86,7 @@ namespace psm::storage
             const char* extra;       // another 0x15 command sent before SetInventory, or nullptr
         };
         // Order matches Settings. Commands come from the game's stage charts.
-        const Chest kChests[Settings::kStorages] = {
+        const Chest kChests[Settings::kStorages + 1] = {
             { "Private Storage", "SetInventory(Character,Focus,True,Default;CampWareHouse,Focus,True,Default)",
               "SetWareHouseInventoryName(UI_WareHouse_CampStroage)", "197270237", "1494912655", "cd_icon_map_bank", nullptr },
             { "Gatherables Chest", "SetInventory(Character,Focus,True;Housing_GatheredMaterials,Focus,True)",
@@ -110,6 +110,12 @@ namespace psm::storage
             // Kuku pot NPC on its own panel; it opens fine in the warehouse screen.
             { "Abyss gear storage", "SetInventory(Character,Focus,True;Kuku,Focus,True)",
               "SetWareHouseInventoryName(UI_Inventory_KukuItemList)", "2520550823", "3472366085", "cd_icon_map_kukushop", nullptr },
+            // Settings::kWeaponsPot. MJ7L's Weapon's Pot: the same Kuku Pot bag screen, opened while
+            // WeaponsPot.asi lets the Weapon's Pot answer as the Kuku Pot (WP_ScreenBegin), the way its
+            // own pot screen works, so every move in it is the game's own Kuku Pot move. That plugin
+            // sets the two titles (WP_ScreenTitle).
+            { "Weapon's Pot", "SetInventory(Character,Focus,True;Kuku,Focus,True)",
+              "SetWareHouseInventoryName(UI_Inventory_KukuItemList)", "2520550823", "3472366085", "cd_icon_map_kukushop", nullptr },
         };
 
         // Stage ids for the mod's screens. Live ids are small and count up from boot,
@@ -117,7 +123,7 @@ namespace psm::storage
         constexpr uint64_t kOwnIdBase = 900000000;
         uint64_t g_nextId = kOwnIdBase;
         SsNode* g_view = nullptr, *g_selector = nullptr;
-        SsNode* g_itemText[Settings::kStorages][8] = {};   // per chest: icon, title hash, modal hash, extra, setInventory, title
+        SsNode* g_itemText[Settings::kStorages + 1][8] = {};   // per chest (and the Weapon's Pot): icon, title hash, modal hash, extra, setInventory, title
 
         // ------------------------------------------------------------ shared state
         // Requests from the keyboard and pad, run on the main thread by the mode switch.
@@ -160,6 +166,29 @@ namespace psm::storage
         std::atomic<DWORD> g_lastTick{0};
         std::atomic<bool>  g_hidingKeys{false};   // published by the poller for PsmHidingKeys
         bool Paused() { return g_pauseUntil.load() > GetTickCount64(); }
+
+        // MJ7L's Weapon's Pot plugin (WeaponsPot.asi), looked up by name; nothing links against it.
+        struct WpScreen { int (*begin)(); void (*end)(); void (*title)(uintptr_t); };
+        WpScreen WpScreenLink()
+        {
+            WpScreen w{};
+            if (const HMODULE h = GetModuleHandleW(L"WeaponsPot.asi"))
+            {
+                w.begin = reinterpret_cast<int (*)()>(GetProcAddress(h, "WP_ScreenBegin"));
+                w.end = reinterpret_cast<void (*)()>(GetProcAddress(h, "WP_ScreenEnd"));
+                w.title = reinterpret_cast<void (*)(uintptr_t)>(GetProcAddress(h, "WP_ScreenTitle"));
+                if (!w.begin || !w.end || !w.title) w = WpScreen{};
+            }
+            return w;
+        }
+        bool g_wpScreen = false;   // the Weapon's Pot answers as the Kuku Pot for our open screen
+        void WpScreenEnd()
+        {
+            if (!g_wpScreen) return;
+            const WpScreen w = WpScreenLink();
+            if (w.end) w.end();
+            g_wpScreen = false;
+        }
 #ifdef PSM_DIAG
         // Milliseconds of hold left, 0 when not paused. For the diagnostic lines.
         long PauseLeftMs() { const ULONGLONG u = g_pauseUntil.load(), n = GetTickCount64(); return u > n ? static_cast<long>(u - n) : 0L; }
@@ -300,6 +329,7 @@ namespace psm::storage
 
         void Forget()
         {
+            WpScreenEnd();
             g_blockMgr = 0;
             g_blockKey = 0;
             g_orphan = false;
@@ -327,6 +357,7 @@ namespace psm::storage
         // SettleOrphan, which runs when the mode is 4 again.
         void Orphan()
         {
+            WpScreenEnd();
             g_orphan = true;
             g_open = false;
             g_openChest = -1;
@@ -368,6 +399,13 @@ namespace psm::storage
             if (!EventWrap()) { LOG_ERR("[storage] %s not opened: the stage chart event wrap was not found", c.label); return false; }
             const uintptr_t mgr = StageManager();
             if (!mgr) { LOG_ERR("[storage] %s not opened: the player's stage manager was not found", c.label); return false; }
+            if (chest == Settings::kWeaponsPot)
+            {
+                const WpScreen w = WpScreenLink();
+                if (!w.begin) { LOG_NOTE("[storage] Weapon's Pot not opened: the Weapon's Pot mod (WeaponsPot.asi from Weapon's Pot 1.1 or later) is not loaded"); return false; }
+                if (!w.begin()) { LOG_NOTE("[storage] Weapon's Pot not opened: the Weapon's Pot plugin is busy (its own screen or an auto-store)"); return false; }
+                g_wpScreen = true;
+            }
 
             const uint64_t id = ++g_nextId;
             char idText[32];
@@ -443,7 +481,12 @@ namespace psm::storage
             if (g_orphan && mode == 4) SettleOrphan(pm, screen);
 
             const int act = g_pending.exchange(kActNone);
-            if (act >= 0 && act < Settings::kStorages) { g_switchTo = -1; Request(pm, act); }
+            if (act >= 0 && act <= Settings::kWeaponsPot)
+            {
+                g_switchTo = -1;
+                deposit::EndWeaponsPotSend();   // no storage opens while the Kuku Pot answers as the Weapon's Pot
+                Request(pm, act);
+            }
 
             if (g_closeRequested.exchange(false) && g_open.load()) Close(pm, "Esc or B");
 
@@ -460,7 +503,7 @@ namespace psm::storage
             if (lastMode != mode || lastScreen != screen)
                 LOG("[diag] frame: mode %d -> %u, screen 0x%02X -> 0x%02X, free play %s", lastMode, mode, lastScreen & 0xFF, screen,
                     g_freePlay.load() ? "yes" : "no");
-            if (act >= 0) LOG("[diag] frame picked up the key request for %s", act < Settings::kStorages ? kChests[act].label : "?");
+            if (act >= 0) LOG("[diag] frame picked up the key request for %s", act <= Settings::kWeaponsPot ? kChests[act].label : "?");
 #endif
             g_lastTick = GetTickCount();
             // Loot moves only in free play, with no storage open or about to open,
@@ -487,6 +530,13 @@ namespace psm::storage
                          kChests[g_openChest.load()].label);
                 Orphan();
                 return;
+            }
+            // The Weapon's Pot's titles: the game sets the Kuku Pot's while the screen builds, so
+            // the plugin sets its own a few times a second while it is open.
+            if (g_wpScreen && g_frames % 10 == 1)
+            {
+                const WpScreen w = WpScreenLink();
+                if (w.title) w.title(g_warehouse.load());
             }
             if (g_frames == 150)
             {
@@ -635,6 +685,7 @@ namespace psm::storage
                 if (v.key[i].vk == vk && v.key[i].mods == mods) return i;
             if (v.dumpKey.vk == vk && v.dumpKey.mods == mods) return -2;
             if (v.hideKeysToggleKey.vk == vk && v.hideKeysToggleKey.mods == mods) return -3;
+            if (v.weaponsPotKey.vk == vk && v.weaponsPotKey.mods == mods && deposit::WeaponsPotInstalled()) return Settings::kWeaponsPot;
             return -1;
         }
 
@@ -647,6 +698,7 @@ namespace psm::storage
             if (v.hideKeysToggleKey.vk && v.hideKeysToggleKey.mods == mods) return true;
             for (int i = 0; i < Settings::kStorages; ++i)
                 if (v.key[i].vk && v.key[i].mods == mods) return true;
+            if (v.weaponsPotKey.vk && v.weaponsPotKey.mods == mods && deposit::WeaponsPotInstalled()) return true;
             return false;
         }
 
@@ -892,7 +944,7 @@ namespace psm::storage
                 ++d.beats, front ? "yes" : "NO", paused ? "YES " : "no, ", paused ? pauseLeft : 0L, ModsText(mods, mt, sizeof mt),
                 g_dTicks.exchange(0), last ? static_cast<long>(now - last) : -1L, g_dMode.load(), g_dScreen.load() & 0xFF,
                 g_freePlay.load() ? "yes" : "no", open >= 0 ? kChests[open].label : "none",
-                pending >= 0 && pending < Settings::kStorages ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
+                pending >= 0 && pending <= Settings::kWeaponsPot ? kChests[pending].label : "none", g_dLoops.exchange(0), g_dPollMax.exchange(0),
                 g_hidingKeys.load() ? "yes" : "no");
             LOG("[diag] heartbeat %d: window procedure saw %u messages, %u key downs, %u WM_INPUT, kept %u key messages from the game; %ld faults logged",
                 d.beats, g_dWndMsgs.exchange(0), g_dWndKeys.exchange(0), g_dWndInput.exchange(0), g_dSwallowed.exchange(0), diag::FaultsLogged());
@@ -1134,6 +1186,20 @@ namespace psm::storage
                     }
                     keyWas[i] = down;
                 }
+                {
+                    // The Weapon's Pot key.
+                    static bool wpKeyWas = false;
+                    const Settings::KeyBind& k = v.weaponsPotKey;
+                    const bool down = front && k.vk && k.mods == mods && KeyDown(k.vk) && deposit::WeaponsPotInstalled();
+                    if (down && !wpKeyWas && !paused)
+                    {
+                        char t[32];
+                        Settings::KeyText(k, t, sizeof t);
+                        LOG("[keys] %s", t);
+                        g_pending = Settings::kWeaponsPot;
+                    }
+                    wpKeyWas = down;
+                }
 #ifdef PSM_DEPOSIT_TEST_KEY
                 {
                     // Deposit test (auto-store): Ctrl+F11 with DebugLog=1, in test builds only.
@@ -1168,6 +1234,26 @@ namespace psm::storage
                     }
                     was[i] = down;
                 }
+                {
+                    // The Weapon's Pot combo, the same as a storage's.
+                    static bool wpWas = false, wpHeld = false;
+                    static DWORD wpSince = 0;
+                    const Settings::PadBind& p = v.weaponsPotPad;
+                    const bool down = p.press && (buttons & p.press) && (buttons & p.hold) == p.hold && deposit::WeaponsPotInstalled();
+                    if (down && !wpWas)
+                    {
+                        wpSince = now;
+                        wpHeld = paused;
+                        if (!paused) g_pending = Settings::kWeaponsPot;
+                    }
+                    if (down && !wpHeld && now - wpSince >= kHoldCloseMs)
+                    {
+                        wpHeld = true;
+                        const int cur = g_openChest.load();
+                        if (g_open.load() && cur >= 0 && static_cast<int32_t>(wpSince - g_openedAt.load()) > 0) g_pending = cur;
+                    }
+                    wpWas = down;
+                }
             }
             g_hidingKeys = false;
 #ifdef PSM_DIAG
@@ -1201,7 +1287,7 @@ namespace psm::storage
         }
         g_view = MakeSs("WareHouseView");
         g_selector = MakeSs("selector-stagechart-self");
-        for (int i = 0; i < Settings::kStorages; ++i)
+        for (int i = 0; i <= Settings::kWeaponsPot; ++i)
         {
             const Chest& c = kChests[i];
             g_itemText[i][0] = MakeSs(c.icon ? c.icon : "");

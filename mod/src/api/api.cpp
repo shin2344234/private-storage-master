@@ -13,6 +13,7 @@
 #include "core/settings.h"
 #include "storage/capacity.h"
 #include "storage/deposit.h"
+#include "storage/inventory.h"
 #include "storage/pad.h"
 #include "storage/stacks.h"
 #include "storage/storage.h"
@@ -266,6 +267,70 @@ PSM_EXPORT int PsmApplyNeverMove(const uint16_t* items, int count, char* why, in
 PSM_EXPORT int PsmDeposit(uint16_t item, int64_t gained) { return psm::deposit::Queue(item, gained) ? 1 : 0; }
 
 PSM_EXPORT int PsmFreePlay(void) { return psm::deposit::FreePlayNow() ? 1 : 0; }
+
+static_assert(PSM_WEAPONS_POT == psm::Settings::kWeaponsPot, "PSM_WEAPONS_POT and Settings::kWeaponsPot must match");
+
+// The Weapon's Pot's size is the Weapon's Pot mod's own setting, so it is read and written through
+// that plugin (WeaponsPot.asi WP_GetSize / WP_SetSize), not this mod's ini.
+static FARPROC WeaponsPotFn(const char* name)
+{
+    const HMODULE h = GetModuleHandleW(L"WeaponsPot.asi");
+    return h ? GetProcAddress(h, name) : nullptr;
+}
+
+PSM_EXPORT int PsmGetWeaponsPot(PsmWeaponsPot* out, int defaults)
+{
+    if (!out || out->size != sizeof *out) return 0;
+    const Values v = defaults ? psm::Settings::Defaults() : psm::Settings::Get();
+    memset(out, 0, sizeof *out);
+    out->size = sizeof *out;
+    out->autoStore = v.autoStoreWeaponsPot;
+    out->installed = psm::deposit::WeaponsPotInstalled();   // the storage record and every WP_* call
+    out->key = {v.weaponsPotKey.vk, v.weaponsPotKey.mods};
+    out->pad = {v.weaponsPotPad.hold, v.weaponsPotPad.press};
+    // The size is the Weapon's Pot mod's own setting: the defaults leave it alone (0).
+    out->slots = 0;
+    out->liveUsed = out->liveCapacity = -1;
+    if (const auto get = reinterpret_cast<int (*)(int*, int*, int*)>(WeaponsPotFn("WP_GetSize")))
+    {
+        int setting = 0;
+        get(&setting, &out->liveUsed, &out->liveCapacity);
+        if (!defaults) out->slots = setting;
+    }
+    return 1;
+}
+
+PSM_EXPORT int PsmApplyWeaponsPot(const PsmWeaponsPot* in, char* why, int whyLen)
+{
+    if (why && whyLen > 0) why[0] = 0;
+    if (!in || in->size != sizeof *in)
+    {
+        if (why && whyLen > 0) snprintf(why, whyLen, "Weapon's Pot struct size %u, expected %zu", in ? in->size : 0, sizeof *in);
+        return 0;
+    }
+    const auto change = [in](Values& v)
+    {
+        v.autoStoreWeaponsPot = in->autoStore != 0;
+        v.weaponsPotKey = {in->key.vk, static_cast<uint8_t>(in->key.mods & 7)};
+        v.weaponsPotPad = {in->pad.hold, in->pad.press};
+    };
+    if (!psm::Settings::Update(change, why, why && whyLen > 0 ? static_cast<size_t>(whyLen) : 0)) return 0;
+    // The size last, once the rest is saved, so a refusal never leaves it half applied.
+    // 0 leaves it as it is.
+    if (in->slots > 0)
+    {
+        int setting = 0, used = 0, cap = 0;
+        const auto get = reinterpret_cast<int (*)(int*, int*, int*)>(WeaponsPotFn("WP_GetSize"));
+        const auto set = reinterpret_cast<int (*)(int)>(WeaponsPotFn("WP_SetSize"));
+        if (get) get(&setting, &used, &cap);
+        if (set && in->slots != setting && !set(in->slots))
+        {
+            if (why && whyLen > 0) snprintf(why, whyLen, "the Weapon's Pot mod could not save its size");
+            return 0;
+        }
+    }
+    return 1;
+}
 
 PSM_EXPORT int PsmDepositResults(PsmDepositResult* out, int max)
 {

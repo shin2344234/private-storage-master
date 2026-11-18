@@ -9,6 +9,7 @@
 #include "core/diag.h"
 #include "core/log.h"
 #include "core/settings.h"
+#include "storage/deposit.h"
 #include "game/mem.h"
 
 namespace psm::pad
@@ -35,6 +36,11 @@ namespace psm::pad
             for (int i = 0; i < Settings::kStorages; ++i)
             {
                 const Settings::PadBind& p = v.pad[i];
+                if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;
+            }
+            if (deposit::WeaponsPotInstalled())
+            {
+                const Settings::PadBind& p = v.weaponsPotPad;
                 if (p.press && (buttons & p.press) && (buttons & p.hold) == p.hold) hiding |= p.press;
             }
             g_hiding.store(hiding);
@@ -116,6 +122,7 @@ namespace psm::pad
         }
         bool anyCombo = false;
         for (int i = 0; i < Settings::kStorages; ++i) anyCombo |= Settings::Get().pad[i].press != 0;
+        anyCombo |= Settings::Get().weaponsPotPad.press != 0;
         if (!anyCombo) return true;
 
         g_slot = FindImportSlot();

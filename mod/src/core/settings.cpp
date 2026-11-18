@@ -264,6 +264,8 @@ namespace psm::Settings
             for (int i = 0; i < kStorages; ++i)
                 fprintf(f, "; %s\n%sKey=%s\n%sPad=%s\n\n", kInfo[i].comment, kInfo[i].key, KeyText(v.key[i], a, sizeof a), kInfo[i].key,
                         PadText(v.pad[i], b, sizeof b));
+            fprintf(f, "; The Weapon's Pot, from MJ7L's Weapon's Pot mod. Does nothing without that mod.\n"
+                       "WeaponsPotKey=%s\nWeaponsPotPad=%s\n\n", KeyText(v.weaponsPotKey, a, sizeof a), PadText(v.weaponsPotPad, b, sizeof b));
             fprintf(f,
                     "; Writes the size and contents count of every storage to the log.\n"
                     "CapacityDumpKey=%s\n\n"
@@ -327,7 +329,8 @@ namespace psm::Settings
                     "; Loot straight into storage. Needs Master Looter 1.6.28 or later; on its own\n"
                     "; this section does nothing. Master Looter reports what it picks up (auto-loot,\n"
                     "; body searches, gathers), and each item goes to the first storage that is on\n"
-                    "; here and takes it, in this order: Collectibles Chest, Abyss gear storage,\n"
+                    "; here and takes it, in this order: the Weapon's Pot (when MJ7L's Weapon's Pot\n"
+                    "; mod is installed), Collectibles Chest, Abyss gear storage,\n"
                     "; Gatherables Chest, Kuku Cooler, Bird Feed, Camp Straw, Wardrobe, then Private\n"
                     "; Storage. The game's own rules decide what each one takes, and what none of\n"
                     "; them takes stays in your bag. What you pick up by hand, buy, craft or take out\n"
@@ -343,6 +346,12 @@ namespace psm::Settings
                     v.autoStore ? 1 : 0);
             for (int i = 0; i < kStorages; ++i)
                 if (i != kTownWarehouse) fprintf(f, "AutoStore%s=%d\n", kInfo[i].key, v.autoStoreTo[i] ? 1 : 0);
+            fprintf(f,
+                    "\n; The Weapon's Pot from MJ7L's Weapon's Pot mod. It takes weapons only, and gets\n"
+                    "; them first, before the Abyss gear storage (which also takes Fire Sticks).\n"
+                    "; Without that mod installed this does nothing.\n"
+                    "AutoStoreWeaponsPot=%d\n",
+                    v.autoStoreWeaponsPot ? 1 : 0);
             fprintf(f,
                     "\n; Which of the mod's default switches the ones above have taken in. Leave it\n"
                     "; as it is: it is how a default that changes later reaches your file once,\n"
@@ -457,6 +466,7 @@ namespace psm::Settings
                 else if (_stricmp(key, "AutoStoreNeverMove") == 0) { ParseItemList(val, out); sawNeverMove = true; }
                 else if (_stricmp(key, "AutoStoreNeverMoveVersion") == 0) { out.autoStoreNeverMoveVersion = atoi(val); sawNeverMoveVersion = true; }
                 else if (_stricmp(key, "AutoStoreDefaultsVersion") == 0) { out.autoStoreDefaultsVersion = atoi(val); sawDefaultsVersion = true; }
+                else if (_stricmp(key, "AutoStoreWeaponsPot") == 0) out.autoStoreWeaponsPot = atoi(val) != 0;
                 else if (_strnicmp(key, "AutoStore", 9) == 0 && AutoStoreSwitch(key + 9, val, out)) {}
                 else if (_stricmp(key, "CapacityDumpKey") == 0)
                 {
@@ -469,6 +479,18 @@ namespace psm::Settings
                     KeyBind k;
                     if (ParseKey(val, k)) out.hideKeysToggleKey = k;
                     else LOG_ERR("[settings] HideKeysToggleKey=%s is not a key this mod can bind; keeping the default", val);
+                }
+                else if (_stricmp(key, "WeaponsPotKey") == 0)
+                {
+                    KeyBind k;
+                    if (ParseKey(val, k)) out.weaponsPotKey = k;
+                    else LOG_ERR("[settings] WeaponsPotKey=%s is not a key this mod can bind; keeping the default", val);
+                }
+                else if (_stricmp(key, "WeaponsPotPad") == 0)
+                {
+                    PadBind p;
+                    if (ParsePad(val, p)) out.weaponsPotPad = p;
+                    else LOG_ERR("[settings] WeaponsPotPad=%s is not a controller combo; keeping the default", val);
                 }
                 else
                 {
@@ -602,6 +624,27 @@ namespace psm::Settings
                     v.dumpKey = KeyBind{};
                     break;
                 }
+            for (int i = 0; i < kStorages; ++i)
+            {
+                if (v.weaponsPotKey.vk && v.weaponsPotKey.vk == v.key[i].vk && v.weaponsPotKey.mods == v.key[i].mods)
+                {
+                    LOG_ERR("[settings] WeaponsPotKey and %sKey are both %s; WeaponsPotKey is turned off", kInfo[i].key,
+                            KeyText(v.weaponsPotKey, t, sizeof t));
+                    v.weaponsPotKey = KeyBind{};
+                }
+                if (v.weaponsPotPad.press && v.weaponsPotPad.press == v.pad[i].press && v.weaponsPotPad.hold == v.pad[i].hold)
+                {
+                    LOG_ERR("[settings] WeaponsPotPad and %sPad are both %s; WeaponsPotPad is turned off", kInfo[i].key,
+                            PadText(v.weaponsPotPad, t, sizeof t));
+                    v.weaponsPotPad = PadBind{};
+                }
+            }
+            if (v.weaponsPotKey.vk && ((v.weaponsPotKey.vk == v.dumpKey.vk && v.weaponsPotKey.mods == v.dumpKey.mods) ||
+                                       (v.weaponsPotKey.vk == v.hideKeysToggleKey.vk && v.weaponsPotKey.mods == v.hideKeysToggleKey.mods)))
+            {
+                LOG_ERR("[settings] WeaponsPotKey=%s is already bound; the Weapon's Pot key is turned off", KeyText(v.weaponsPotKey, t, sizeof t));
+                v.weaponsPotKey = KeyBind{};
+            }
             const KeyBind& h = v.hideKeysToggleKey;
             bool clash = h.vk && h.vk == v.dumpKey.vk && h.mods == v.dumpKey.mods;
             for (int i = 0; i < kStorages && !clash; ++i) clash = h.vk && h.vk == v.key[i].vk && h.mods == v.key[i].mods;
@@ -650,8 +693,14 @@ namespace psm::Settings
         }
     }
 
-    const char* StorageKeyName(int storage) { return storage >= 0 && storage < kStorages ? kInfo[storage].key : "?"; }
-    const char* StorageLabel(int storage) { return storage >= 0 && storage < kStorages ? kInfo[storage].label : "?"; }
+    const char* StorageKeyName(int storage)
+    {
+        return storage >= 0 && storage < kStorages ? kInfo[storage].key : storage == kWeaponsPot ? "WeaponsPot" : "?";
+    }
+    const char* StorageLabel(int storage)
+    {
+        return storage >= 0 && storage < kStorages ? kInfo[storage].label : storage == kWeaponsPot ? "Weapon's Pot" : "?";
+    }
 
     const char* KeyText(const KeyBind& k, char* out, size_t cap)
     {
@@ -700,6 +749,8 @@ namespace psm::Settings
         }
         ParseKey("Ctrl+F12", v.dumpKey);
         ParseKey("Ctrl+F10", v.hideKeysToggleKey);   // F10 is in the game's debug group only
+        // The Weapon's Pot key starts unbound: Ctrl+F11 is Steam's recording key, and
+        // the player picks one in Master Looter or the ini.
         return v;
     }
 
@@ -755,6 +806,16 @@ namespace psm::Settings
                     return 0;
                 }
             }
+            if (v.weaponsPotKey.vk && !Bindable(v.weaponsPotKey.vk))
+            {
+                if (why) snprintf(why, whyLen, "Weapon's Pot: mouse buttons and modifier keys cannot be bound");
+                return 0;
+            }
+            if (v.weaponsPotPad.press && (v.weaponsPotPad.hold & v.weaponsPotPad.press))
+            {
+                if (why) snprintf(why, whyLen, "Weapon's Pot: the pressed button is also a held one");
+                return 0;
+            }
             if (v.dumpKey.vk && !Bindable(v.dumpKey.vk))
             {
                 if (why) snprintf(why, whyLen, "Capacity dump: mouse buttons and modifier keys cannot be bound");
@@ -766,7 +827,19 @@ namespace psm::Settings
                 return 0;
             }
             Clamp(v);
+            // The Weapon's Pot's key and combo give way to every other binding. When one
+            // is turned off here, the caller is told why (Master Looter shows it).
+            const KeyBind wpKey = v.weaponsPotKey;
+            const PadBind wpPad = v.weaponsPotPad;
             Deduplicate(v);
+            if (why && whyLen)
+            {
+                char t[32];
+                if (wpKey.vk && !v.weaponsPotKey.vk)
+                    snprintf(why, whyLen, "%s is also another key, so the Weapon's Pot key is turned off", KeyText(wpKey, t, sizeof t));
+                else if (wpPad.press && !v.weaponsPotPad.press)
+                    snprintf(why, whyLen, "%s is also another combo, so the Weapon's Pot combo is turned off", PadText(wpPad, t, sizeof t));
+            }
             v.imported = Get().imported;
             Publish(v);
             return WriteIni(v) ? 1 : 2;

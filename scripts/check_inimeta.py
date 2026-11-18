@@ -115,6 +115,7 @@ def parse_values_defaults(h):
     autoTo = must(r"bool\s+autoStoreTo\[kStorages\]\s*=\s*\{([^}]*)\};", h, "autoStoreTo default").group(1)
     d["autoStoreTo"] = [bool_default(x.strip()) for x in autoTo.split(",")]
     d["AutoStoreOnlyGained"] = bool_default(must(r"bool\s+autoStoreOnlyGained\s*=\s*(\w+);", h, "autoStoreOnlyGained").group(1))
+    d["AutoStoreWeaponsPot"] = bool_default(must(r"bool\s+autoStoreWeaponsPot\s*=\s*(\w+);", h, "autoStoreWeaponsPot").group(1))
     neverMove = must(r"uint16_t autoStoreNeverMove\[kNeverMoveMax\]\s*=\s*\{([^}]*)\};", h, "autoStoreNeverMove default").group(1)
     d["autoStoreNeverMove"] = [int(x.strip()) for x in neverMove.split(",")]
     return d
@@ -228,6 +229,7 @@ def main():
     })
     check("AutoStore", autostore_keys, "AutoStore", {"type": "bool", "default": defaults["AutoStore"]})
     check("AutoStore", autostore_keys, "AutoStoreOnlyGained", {"type": "bool", "default": defaults["AutoStoreOnlyGained"]})
+    check("AutoStore", autostore_keys, "AutoStoreWeaponsPot", {"type": "bool", "default": defaults["AutoStoreWeaponsPot"]})
     check("AutoStore", autostore_keys, "AutoStoreNeverMoveVersion", {
         "type": "int",
         "default": str(const["kNeverMoveVersion"]),
@@ -319,8 +321,10 @@ def main():
             errors.append("%s: modifiers should be true, since every key setting takes Ctrl, Shift and Alt" % k)
 
     # ---------------------------------------------------------------- nothing extra
+    check("PrivateStorageMaster", main_keys, "WeaponsPotKey", {"type": "key", "default": "None"})
+    check("PrivateStorageMaster", main_keys, "WeaponsPotPad", {"type": "string", "default": "None"})
     expected_main = {"Enabled", "DebugLog", "HideKeysWithModifier", "LeaveCapacityAlone", "CapacityDumpKey",
-                      "HideKeysToggleKey", "PrivateStorageExpansions"}
+                      "HideKeysToggleKey", "PrivateStorageExpansions", "WeaponsPotKey", "WeaponsPotPad"}
     for s, fixed in zip(storages, const["kFixedSlots"]):
         expected_main.add(s["key"] + "Key")
         expected_main.add(s["key"] + "Pad")
@@ -331,7 +335,7 @@ def main():
                        "the code" % k)
 
     expected_autostore = {"AutoStore", "AutoStoreOnlyGained", "AutoStoreNeverMove", "AutoStoreNeverMoveVersion",
-                          "AutoStoreDefaultsVersion"}
+                          "AutoStoreDefaultsVersion", "AutoStoreWeaponsPot"}
     for i, s in enumerate(storages):
         if i != town:
             expected_autostore.add("AutoStore" + s["key"])
