@@ -104,7 +104,8 @@ Keys
     Ctrl+F12  write every storage's size to the log
 
 The same key closes. Another storage's key switches straight to it. Esc and B
-close too. Keys only work in free play.
+close too. Keys only work in free play. Any of these keys set to None does
+nothing, and INI Master's clear button sets None too.
 
 Since 1.1.7, a cutscene, dialog, minigame or fade that starts while a storage
 is open closes the storage for you, the way Esc does. Before, the chest menu could

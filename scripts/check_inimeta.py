@@ -301,6 +301,13 @@ def main():
             return [chr(c) for c in range(ord(m.group(1)), ord(m.group(2)) + 1)]
         return [entry]
 
+    # ParseKey reads None (and an empty value) as no key for every key setting.
+    # INI Master lets a listed key be cleared only when the list holds None, so
+    # every list needs it, or the clear button goes grey for a key the plugin
+    # lets the player turn off.
+    parse_key = must(r"bool ParseKey\(const char\* text, KeyBind& out\)\s*\{(.*?)\n        \}", cpp, "ParseKey", re.S).group(1)
+    none_is_no_key = re.search(r'if \([^\n]*_stricmp\(text,\s*"none"\)\s*==\s*0[^\n]*\)\s*return true;', parse_key) is not None
+
     for k, spec in sorted(main_keys.items()):
         if spec.get("type") != "key":
             continue
@@ -308,8 +315,15 @@ def main():
         if not isinstance(listed, list):
             errors.append("%s: no keys list, so INI Master offers keys the plugin refuses" % k)
             continue
+        has_none = any(e.strip().lower() == "none" for e in listed)
+        if none_is_no_key and not has_none:
+            errors.append("%s: keys leaves out None, so INI Master will not clear a key settings.cpp lets go unbound" % k)
+        elif has_none and not none_is_no_key:
+            errors.append("%s: keys lists None, which settings.cpp's ParseKey no longer reads as no key" % k)
         got = set()
         for entry in listed:
+            if entry.strip().lower() == "none":
+                continue
             for name in expand(entry):
                 vk = name_to_vk.get(name.lower(), name.lower())
                 if vk not in accepted:
