@@ -3,8 +3,18 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3663 (2.05.00).
+the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3732 (2.05.01).
 For 2.02.00 to 2.03.02, use 1.1.7.
+
+New in 1.1.15: the Weapon's Pot from MJ7L's Weapon's Pot mod works like the
+other storages. With Weapon's Pot 1.1 or later installed, loot storing sends
+weapons there before any other storage, and WeaponsPotKey and WeaponsPotPad in
+the ini open it from anywhere. The key starts unbound, so pick one in the ini or
+on Master Looter's Storage tab. AutoStoreWeaponsPot=0 keeps weapons out of it.
+Its size is the Weapon's Pot mod's own setting, which Master Looter's Storage tab
+can change. Without that mod none of this does anything. MJ7L wrote it, and
+majahkil tested it on 2.05.01. 1.1.14 already ran on 2.05.01, exe 1.0.0.3732,
+and 1.1.15 now lists it as supported.
 
 New in 1.1.14: the storage keys work when another mod has hooked the same game
 function. On 1.1.13 the plugin looked for the game's storage close function at
@@ -103,11 +113,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.14:
+SHA-256 for 1.1.15:
 
-    f0d2967a43aae3e77826535e684cdf3bfe9d0b994e30d9babff51dcc3ca057d2  PrivateStorageMaster-1.1.14-DMM.zip
-    509eb22dbad6bc480be02f7e0799470f933672a7f61a4b8853d4cb837a2501ec  PrivateStorageMaster-1.1.14.zip
-    e40d41c7cfb39ec3762cfe3aa6be526078fd8192b08e7e9dcf75cecaaaca0ecf  PrivateStorageMaster.asi
+    2b031df36ef4fa7be903b816fb2fc78095213e11c85c72d00a1f78e78c5c755a  PrivateStorageMaster-1.1.15-DMM.zip
+    9083ac3c9b3a46e0a9789fb5285573669eba21da3951f1cb1ae6e881c68a1e97  PrivateStorageMaster-1.1.15.zip
+    c527a5694c32b17f34c1c69f18716e8b80e6129f4972803d771611dab591766b  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 

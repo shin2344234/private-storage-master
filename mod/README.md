@@ -1,4 +1,4 @@
-Private Storage Master 1.1.14 for Crimson Desert 1.0.0.3392 to 1.0.0.3663
+Private Storage Master 1.1.15 for Crimson Desert 1.0.0.3392 to 1.0.0.3732
 ========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -8,12 +8,13 @@ Looter puts your loot straight into storage.
 Install
 -------
 
-1.1.14 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3663
-(2.05.00). On 2.02.00 to 2.03.02, use 1.1.7, which stays on the Files tab.
+1.1.15 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3732
+(2.05.01). On 2.02.00 to 2.03.02, use 1.1.7, which stays on the Files tab.
 Your ini carries over either way. On 2.05.00, 1.1.11 stored no loot, and
 1.1.12 is the first version that does. 1.1.13 turns Bird Feed off for loot
 storing and gives the Collectibles Chest its full size, see below. 1.1.14 keeps
-the storage keys working when another mod hooks the same game function.
+the storage keys working when another mod hooks the same game function. 1.1.15
+adds the Weapon's Pot, see below.
 
 1. Remove PrivateStorageAnywhere.asi from bin64 and disable it in your mod
    manager. Leave its ini in place for the first launch so your bindings are
@@ -116,6 +117,24 @@ need, the plugin hooks where that mod's jump lands and both run. Before, the
 keys went off with "StageClose: pattern matched 0 places" in the log. The log
 now names the module the jump lands in. A key bound to the plain 0 key also
 keeps its binding on the next start.
+
+The Weapon's Pot
+----------------
+
+New in 1.1.15, written by MJ7L. With MJ7L's Weapon's Pot mod, version 1.1 or
+later, the pot works like the storages above. WeaponsPotKey and WeaponsPotPad
+open it from anywhere and close it again. Both start as None, because Ctrl+F11
+is Steam's recording key, so set one in the ini or on Master Looter's Storage
+tab. A key or combo another storage already uses turns the pot's off, and
+the log says which.
+
+    WeaponsPotKey=Ctrl+Numpad1
+
+Loot storing sends weapons to the pot before any other storage. It takes
+weapons only. AutoStoreWeaponsPot=0 in [AutoStore] keeps them out of it. The
+pot's size is WeaponsPotSlots in the Weapon's Pot mod's own ini, and Master
+Looter's Storage tab can set it. Without the Weapon's Pot mod these settings
+do nothing.
 
 Holding Ctrl keeps F1 to F12 from the game, so a slip from one storage key to
 the next F key goes nowhere. Every other key gets through, because Ctrl is also
