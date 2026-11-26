@@ -43,19 +43,53 @@ namespace psm::inv
         return mem::ReadPtr(records + static_cast<uintptr_t>(g_addr.invMgrStride) * i + g_addr.invMgrEntryRec, rec);
     }
 
+    unsigned RecNeedSave() { return g_addr.recNeedSave; }
+    unsigned RecDefault() { return g_addr.recDefault; }
+    unsigned RecMax() { return g_addr.recMax; }
+
+    namespace
+    {
+        // staticstringA node pointer at `slot`, first qword of the node the text.
+        bool ReadName(uintptr_t slot, char* out, size_t cap)
+        {
+            uintptr_t node = 0, text = 0;
+            out[0] = 0;
+            return mem::ReadPtr(slot, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
+        }
+    }
+
+    bool EntryName(uintptr_t records, uint32_t i, char* out, size_t cap)
+    {
+        out[0] = 0;
+        if (g_addr.invMgrEntryName)
+            return ReadName(records + static_cast<uintptr_t>(g_addr.invMgrStride) * i + g_addr.invMgrEntryName, out, cap);
+        uintptr_t rec = 0;
+        return RecordAt(records, i, &rec) && ReadName(rec + kRecName, out, cap);
+    }
+
     bool RecordName(uintptr_t rec, char* out, size_t cap)
     {
-        uintptr_t node = 0, text = 0;
         out[0] = 0;
-        return mem::ReadPtr(rec + kRecName, &node) && mem::ReadPtr(node, &text) && mem::ReadCString(text, out, cap);
+        if (!g_addr.invMgrEntryName) return ReadName(rec + kRecName, out, cap);
+        uint16_t key = 0;
+        uint32_t n = 0;
+        uintptr_t arr = 0;
+        if (!mem::Read16(rec + kRecKey, &key) || !Manager(&n, &arr)) return false;
+        for (uint32_t i = 0; i < n; ++i)
+        {
+            uint16_t k = 0;
+            const uintptr_t entry = arr + static_cast<uintptr_t>(g_addr.invMgrStride) * i;
+            if (mem::Read16(entry, &k) && k == key) return ReadName(entry + g_addr.invMgrEntryName, out, cap);
+        }
+        return false;
     }
 
     bool IndexName(uint16_t index, char* out, size_t cap)
     {
         uint32_t n = 0;
-        uintptr_t arr = 0, rec = 0;
+        uintptr_t arr = 0;
         out[0] = 0;
-        return Manager(&n, &arr) && index < n && RecordAt(arr, index, &rec) && RecordName(rec, out, cap);
+        return Manager(&n, &arr) && index < n && EntryName(arr, index, out, cap);
     }
 
     uintptr_t RecordByName(const char* want)
@@ -67,7 +101,7 @@ namespace psm::inv
         {
             uintptr_t rec = 0;
             char name[40];
-            if (RecordAt(arr, i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return rec;
+            if (EntryName(arr, i, name, sizeof name) && strcmp(name, want) == 0 && RecordAt(arr, i, &rec)) return rec;
         }
         return 0;
     }
@@ -79,9 +113,8 @@ namespace psm::inv
         if (!Manager(&n, &arr)) return -1;
         for (uint32_t i = 0; i < n; ++i)
         {
-            uintptr_t rec = 0;
             char name[40];
-            if (RecordAt(arr, i, &rec) && RecordName(rec, name, sizeof name) && strcmp(name, want) == 0) return static_cast<int>(i);
+            if (EntryName(arr, i, name, sizeof name) && strcmp(name, want) == 0) return static_cast<int>(i);
         }
         return -1;
     }

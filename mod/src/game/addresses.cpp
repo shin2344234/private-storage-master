@@ -45,6 +45,52 @@ namespace psm::addr
             return true;
         }
 
+        // 1.0.0.3840: the record lookup is no longer inline. Every static info manager
+        // calls one function, (table in rcx, key in edx) -> record or 0, and its code
+        // is the same for all of them, so the shape alone matches dozens of functions.
+        // The caller that loads this manager's global just before the call picks the
+        // one whose result the mod reads. The function holds the layout:
+        //   cmp edx, [rcx+count]            <- one byte at +27
+        //   lea rdi, [rbp*2]; add rdi, rbp  <- times 3
+        //   shl rdi, 4                      <- one byte at +65, so 0x30 per entry
+        //   add rdi, [rsi+array]            <- one byte at +69
+        // and further down the entry's record pointer is tested:
+        //   cmp qword [rdi+rec], 0
+        uintptr_t UniqueWithin(uintptr_t from, size_t len, const char* pattern, int* hitsOut);
+
+        const char* const kSharedLookup =
+            "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 30 8B EA 48 8B F1 3B 51 ?? 0F 83 ?? ?? ?? ?? 48 8B 49 08 E8 ?? ?? ?? ?? "
+            "84 C0 0F 84 ?? ?? ?? ?? 48 8D 3C 6D 00 00 00 00 48 03 FD 48 C1 E7 ?? 48 03 7E ??";
+
+        bool SharedLookupVisit(uintptr_t hit, void* p)
+        {
+            auto* x = static_cast<LayoutCtx*>(p);
+            if (mem::RipAt(hit, 7) != x->global) return false;   // mov rcx, [rip+g]
+            for (unsigned k = 7; k < 0x30; ++k)
+            {
+                uint8_t op = 0;
+                uint32_t rel = 0;
+                if (!mem::Read8(hit + k, &op) || op != 0xE8 || !mem::Read32(hit + k + 1, &rel)) continue;
+                const uintptr_t fn = hit + k + 5 + static_cast<int32_t>(rel);
+                if (!mem::InImage(fn) || !mem::MatchAt(fn, kSharedLookup)) continue;
+                uint8_t count = 0, shift = 0, array = 0, rec = 0;
+                int hits = 0;
+                const uintptr_t recTest = UniqueWithin(fn + 0x40, 0xC0, "48 83 7F ?? 00 75", &hits);
+                if (!mem::Read8(fn + 27, &count) || !mem::Read8(fn + 65, &shift) || !mem::Read8(fn + 69, &array) || shift != 4 || !recTest ||
+                    !mem::Read8(recTest + 3, &rec))
+                    continue;
+                x->c->invMgrCount = count;
+                x->c->invMgrArray = array;
+                x->c->invMgrStride = 3u << shift;
+                x->c->invMgrEntryRec = rec;
+                // The name node sits at entry+8: the table loader stores the staticstringA
+                // it just read there, a key u16 at +0 and the body offset and size after it.
+                x->c->invMgrEntryName = 8;
+                return true;
+            }
+            return false;
+        }
+
         void ManagerLayout(Capacity& c)
         {
             // 1.0.0.3663: mov rcx,[rip+g]; cmp r8d,[rcx+count]; jb; ...; ret;
@@ -53,15 +99,17 @@ namespace psm::addr
             // 1.0.0.3392 to 3576: mov rbx,[rip+g]; cmp edx,[rbx+count]; jae; mov esi,edi;
             //                     mov rax,[rbx+array]; mov rax,[rax+rdi*8]
             LayoutCtx old{ c.invMgrGlobal, 9, 21, 0, 8, &c };
+            LayoutCtx shared{ c.invMgrGlobal, 0, 0, 0, 0, &c };
             if (!mem::FindIf("48 8B 0D ?? ?? ?? ?? 44 3B 41 ?? 72 ?? 48 8B 05 ?? ?? ?? ?? 48 83 C4 28 C3 48 8B 41 ?? 4B 8D 14 40 48 83 7C D0 ?? 00",
                              LayoutVisit, &now) &&
-                !mem::FindIf("48 8B 1D ?? ?? ?? ?? 3B 53 ?? 0F 83 ?? ?? ?? ?? 8B F7 48 8B 43 ?? 48 8B 04 F8", LayoutVisit, &old))
+                !mem::FindIf("48 8B 1D ?? ?? ?? ?? 3B 53 ?? 0F 83 ?? ?? ?? ?? 8B F7 48 8B 43 ?? 48 8B 04 F8", LayoutVisit, &old) &&
+                !mem::FindIf("48 8B 0D ?? ?? ?? ??", SharedLookupVisit, &shared))
             {
                 LOG_ERR("[addr] no record lookup reads the InventoryInfoManager global, so its table layout is unknown");
                 return;
             }
-            LOG("[addr] inventory records: count at +0x%X, array at +0x%X, 0x%X per entry, record at +0x%X",
-                c.invMgrCount, c.invMgrArray, c.invMgrStride, c.invMgrEntryRec);
+            LOG("[addr] inventory records: count at +0x%X, array at +0x%X, 0x%X per entry, record at +0x%X%s",
+                c.invMgrCount, c.invMgrArray, c.invMgrStride, c.invMgrEntryRec, c.invMgrEntryName ? ", name in the entry at +0x08" : "");
         }
 
         // The first of several patterns that matches exactly once, newest build first,
@@ -371,29 +419,62 @@ namespace psm::addr
 
     bool ResolveCapacity(Capacity& c)
     {
-        // The reads of _defaultSlotCount (+0x10) and _maxSlotCount (+0x14), with
-        // the u16 at +0x12 between them; the record is the second argument, kept
-        // in rdi, and the stream is called through its slot at +0x28. The DLC
-        // build reordered the record small fields first, so none of the 2.03
-        // offsets hold, and a build that moves them again gets no match.
+        // The reads of _defaultSlotCount and _maxSlotCount, with the u16 between
+        // them, which is the default plus 2 and the max minus 2 on every build so
+        // far; the record is the second argument, kept in rdi, and the stream is
+        // called through its slot at +0x28. The three offsets are read out of the
+        // code: +0x10, +0x12, +0x14 from 3392 to 3732 and +0x0E, +0x10, +0x12 on
+        // 3840, which also dropped _stringKey from the record. Each read's error
+        // string names its field, and the strings are what pin the offsets.
         const uintptr_t fields = Unique("InventoryInfo field reads",
-            "48 8D 57 10 48 8B 03 41 B8 02 00 00 00 48 8B CB FF 50 28 84 C0 75 ?? 48 8D 05 ?? ?? ?? ?? E9 ?? ?? ?? ?? "
+            "48 8D 57 ?? 48 8B 03 41 B8 02 00 00 00 48 8B CB FF 50 28 84 C0 75 ?? 48 8D 05 ?? ?? ?? ?? E9 ?? ?? ?? ?? "
             "48 8B 03 41 B8 04 00 00 00 48 8D 94 24 ?? ?? ?? ?? 48 8B CB FF 50 28 84 C0 0F 84 ?? ?? ?? ?? "
-            "8B 94 24 ?? ?? ?? ?? 48 8D 8C 24 ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B7 84 24 ?? ?? ?? ?? 66 89 47 12 "
-            "48 8D 57 14 48 8B 03 41 B8 02 00 00 00 48 8B CB FF 50 28 84 C0");
+            "8B 94 24 ?? ?? ?? ?? 48 8D 8C 24 ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B7 84 24 ?? ?? ?? ?? 66 89 47 ?? "
+            "48 8D 57 ?? 48 8B 03 41 B8 02 00 00 00 48 8B CB FF 50 28 84 C0 75 ?? 48 8D 05 ?? ?? ?? ??");
         if (fields)
         {
+            uint8_t def = 0, mid = 0, mx = 0;
+            char sDef[96] = {}, sMax[96] = {};
             const uintptr_t entry = FunctionEntry(fields);
             if (!entry || fields - entry > 0x400)
                 LOG_ERR("[addr] InventoryInfo reader: no function entry for +%llX", R(fields));
-            else if (!mem::MatchAt(entry, "48 8B C4 48 89 58 08 55 56 57 48 83 EC 60 48 8B FA 48 8B D9"))
+            else if (!mem::Read8(fields + 3, &def) || !mem::Read8(fields + 97, &mid) || !mem::Read8(fields + 101, &mx) || mid != def + 2 || mx != def + 4 ||
+                     def < 0x08 || def > 0x40)
+                LOG_ERR("[addr] InventoryInfo reader at +%llX reads _defaultSlotCount and _maxSlotCount at offsets that do not fit together", R(entry));
+            else if (!mem::ReadBytes(mem::RipAt(fields + 23, 7), sDef, sizeof sDef - 1) || !strstr(sDef, "_defaultSlotCount") ||
+                     !mem::ReadBytes(mem::RipAt(fields + 121, 7), sMax, sizeof sMax - 1) || !strstr(sMax, "_maxSlotCount"))
+                LOG_ERR("[addr] InventoryInfo reader at +%llX: the reads at +0x%X and +0x%X are not _defaultSlotCount and _maxSlotCount", R(entry), def, mx);
+            else if (!mem::MatchAt(entry, "48 8B C4 48 89 58 ?? 55 56 57 48 83 EC 60 48 8B FA 48 8B D9"))
                 LOG_ERR("[addr] InventoryInfo reader at +%llX does not start the way it did on 1.0.0.3392", R(entry));
-            else if (!FindWithin(entry, 0x80, "48 8B D7 48 8B CB E8") || !FindWithin(entry, 0x400, "48 8D 57 0D 48 8B 03 41 B8 01 00 00 00"))
-                LOG_ERR("[addr] InventoryInfo reader at +%llX no longer reads _stringKey at +0x00 and _needSaveSlotCount at +0x0D", R(entry));
             else
             {
-                c.inventoryInfoRead = entry;
-                LOG("[addr] InventoryInfo reader +%llX", R(entry));
+                // _needSaveSlotCount is the one-byte read three bytes before the default.
+                char want[128];
+                snprintf(want, sizeof want, "48 8D 57 %02X 48 8B 03 41 B8 01 00 00 00 48 8B CB FF 50 28 84 C0 75 ?? 48 8D 05 ?? ?? ?? ??", def - 3);
+                int hits = 0;
+                const uintptr_t need = UniqueWithin(entry, 0x400, want, &hits);
+                char sNeedName[96] = {};
+                const bool needOk = need && mem::ReadBytes(mem::RipAt(need + 23, 7), sNeedName, sizeof sNeedName - 1) && strstr(sNeedName, "_needSaveSlotCount");
+                // Names in the record (3392 to 3732) are read by a call that takes the
+                // record itself; names in the table entry (3840) leave the record
+                // starting with its u16 key, stored right after the first stream read.
+                const bool nameInRecord = FindWithin(entry, 0x80, "48 8B D7 48 8B CB E8");
+                const bool keyFirst = FindWithin(entry, 0x100, "0F B7 84 24 ?? ?? ?? ?? 66 89 07");
+                if (!needOk)
+                    LOG_ERR("[addr] InventoryInfo reader at +%llX does not read _needSaveSlotCount at +0x%X", R(entry), def - 3);
+                else if (nameInRecord == keyFirst)
+                    LOG_ERR("[addr] InventoryInfo reader at +%llX: cannot tell where the record keeps its name (%s)", R(entry),
+                            nameInRecord ? "both a name read and a key first" : "neither a name read nor a key first");
+                else
+                {
+                    c.inventoryInfoRead = entry;
+                    c.recDefault = def;
+                    c.recMax = mx;
+                    c.recNeedSave = def - 3u;
+                    c.readerNamesInEntry = keyFirst;
+                    LOG("[addr] InventoryInfo reader +%llX, needSave +0x%X, default +0x%X, max +0x%X, name in the %s", R(entry), c.recNeedSave, c.recDefault,
+                        c.recMax, keyFirst ? "table entry" : "record");
+                }
             }
         }
 
@@ -416,6 +497,14 @@ namespace psm::addr
             else LOG_ERR("[addr] InventoryInfoManager slots 2 and 3 do not name one global");
         }
         if (c.invMgrGlobal) ManagerLayout(c);
+        // The reader and the table have to agree on where the name lives, or every
+        // lookup by name would read the wrong thing.
+        if (c.inventoryInfoRead && c.invMgrStride && (c.invMgrEntryName != 0) != c.readerNamesInEntry)
+        {
+            LOG_ERR("[addr] the InventoryInfo reader keeps the name %s, but the record table keeps it %s",
+                    c.readerNamesInEntry ? "in the table entry" : "in the record", c.invMgrEntryName ? "in the table entry" : "in the record");
+            c.invMgrStride = 0;
+        }
         c.actorManagerGlobal = Global("ActorManager", "48 8B 0D ?? ?? ?? ?? 48 8B 49 58 E8 ?? ?? ?? ?? 90 40 38 74 24 40 40 0F 94 C5 48 8D 05 ?? ?? ?? ??", 7);
 
         // Loot storing (R5). The entry, then the fourth argument read back from its
@@ -426,7 +515,7 @@ namespace psm::addr
         // and the home slot are wildcards.
         const uintptr_t move = Unique("ClientMoveItem",
             "44 89 4C 24 20 44 89 44 24 18 48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 "
-            "48 8D AC 24 ?? F7 FF FF 48 81 EC ?? 09 00 00 4C 8B E2");
+            "48 8D AC 24 ?? F7 FF FF 48 81 EC ?? 09 00 00 4C 8B ??");
         if (move && FindWithin(move, 0x100, "48 8B 49 30 E8 ?? ?? ?? ?? 90 44 8B 85 ?? 09 00 00")) c.clientMoveItem = move;
         else if (move) LOG_ERR("[addr] ClientMoveItem at +%llX no longer looks up both actors the way it did on 1.0.0.3392", R(move));
 
@@ -436,10 +525,23 @@ namespace psm::addr
         // byte has moved in three updates (+0x5E, +0x5F, +0x21 on the DLC build),
         // which is why the game decides rather than the mod. On the DLC build the
         // info lookup takes its key by value in edx, and 1.0.0.3663 passes it by
-        // pointer from a stack slot.
+        // pointer from a stack slot. 1.0.0.3840 passes it by value again, to a lookup
+        // that takes the table in rcx and returns 0 for a missing key, which the
+        // game answers with the table's first record. The decisions after the lookup
+        // are the same on every build, so the chain the mod relies on is checked in
+        // the function body: mode 1 goes through [[actor+0xA0]+0xD0], anything else
+        // through [[actor+0x68]+0xB8].
         c.inventoryHolderOf = UniqueAny("GetInventoryHolder", {
+            "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 0D ?? ?? ?? ?? 48 8B 50 20 0F B7 52 30 E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 85 C0 48 0F 45 C8",
             "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 48 20 0F B7 41 30 48 8D 4C 24 30",
             "40 53 48 83 EC 20 48 8B 41 68 48 8B D9 48 8B 50 20 0F B7 52 30 E8"});
+        if (c.inventoryHolderOf &&
+            !(FindWithin(c.inventoryHolderOf, 0x100, "48 8B 9B A0 00 00 00 48 85 DB 74 ?? 48 8B 9B D0 00 00 00 48 85 DB 74 ??") &&
+              FindWithin(c.inventoryHolderOf, 0x100, "48 8B 43 68 48 8B 80 B8 00 00 00")))
+        {
+            LOG_ERR("[addr] GetInventoryHolder at +%llX no longer follows [[actor+0xA0]+0xD0] and [[actor+0x68]+0xB8]", R(c.inventoryHolderOf));
+            c.inventoryHolderOf = 0;
+        }
         return c.inventoryInfoRead && c.invMgrGlobal;
     }
 
@@ -481,22 +583,38 @@ namespace psm::addr
             return false;
         }
         // (stream in rcx, kept in rdi; record in rdx, kept in rsi).
-        if (!mem::MatchAt(entry, "48 8B C4 48 89 58 08 48 89 68 20 56 57 41 56 48 83 EC 60 48 8B F2 48 8B F9"))
+        if (!mem::MatchAt(entry, "48 8B C4 48 89 58 ?? 48 89 68 20 56 57 41 56 48 83 EC 60 48 8B F2 48 8B F9"))
         {
             LOG_ERR("[addr] ItemInfo reader at +%llX does not start the way it did on 1.0.0.3392", R(entry));
             return false;
         }
-        // _key, four bytes read into a local and stored at record+0x08, which
-        // the hook reads to leave the self-refilling ammo alone.
-        if (!FindWithin(entry, 0x100,
-                        "41 B8 04 00 00 00 48 8D 94 24 ?? ?? ?? ?? 48 8B CF FF 50 28 84 C0 75 ?? 33 DB 48 8D 05 ?? ?? ?? ?? "
-                        "E9 ?? ?? ?? ?? 8B 84 24 ?? ?? ?? ?? 89 46 08"))
+        // _key, four bytes read into a local and stored in the record, which the
+        // hook reads to leave the self-refilling ammo alone. It was at +0x08 up to
+        // 1.0.0.3732 (the string key came first) and is at +0x00 on 3840, where the
+        // record starts with the key and _staticInfoIndex follows it.
+        const char* const kKeyRead =
+            "41 B8 04 00 00 00 48 8D 94 24 ?? ?? ?? ?? 48 8B CF FF 50 28 84 C0 75 ?? 33 DB 48 8D 05 ?? ?? ?? ?? "
+            "E9 ?? ?? ?? ?? 8B 84 24 ?? ?? ?? ?? ";
+        char keyPattern[192];
+        const char* tails[2] = {"89 46 08", "89 06"};
+        const unsigned offsets[2] = {8, 0};
+        bool found = false;
+        for (int i = 0; i < 2 && !found; ++i)
         {
-            LOG_ERR("[addr] ItemInfo reader at +%llX no longer stores _key at +0x08", R(entry));
+            snprintf(keyPattern, sizeof keyPattern, "%s%s", kKeyRead, tails[i]);
+            if (FindWithin(entry, 0x100, keyPattern))
+            {
+                s.keyAt = offsets[i];
+                found = true;
+            }
+        }
+        if (!found)
+        {
+            LOG_ERR("[addr] ItemInfo reader at +%llX no longer stores _key at +0x08 or +0x00", R(entry));
             return false;
         }
         s.itemInfoRead = entry;
-        LOG("[addr] ItemInfo reader +%llX", R(entry));
+        LOG("[addr] ItemInfo reader +%llX, _key at +0x%02X", R(entry), s.keyAt);
         return true;
     }
 }

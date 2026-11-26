@@ -180,7 +180,7 @@ namespace psm::capacity
                 if (!t.wanted || strcmp(name, t.name) != 0) continue;
                 uint16_t d = 0, m = 0;
                 uint8_t needSave = 0;
-                if (!mem::Read16(rec + inv::kRecDefault, &d) || !mem::Read16(rec + inv::kRecMax, &m) || !mem::Read8(rec + inv::kRecNeedSave, &needSave)) return;
+                if (!mem::Read16(rec + inv::RecDefault(), &d) || !mem::Read16(rec + inv::RecMax(), &m) || !mem::Read8(rec + inv::RecNeedSave(), &needSave)) return;
                 if (!t.seen.load())
                 {
                     Plan(t, rec, d, m, needSave);
@@ -191,8 +191,8 @@ namespace psm::capacity
                 if (d != t.stockDefault || m != t.stockMax) return; // not the data this plan was made from; leave it
                 __try
                 {
-                    *reinterpret_cast<uint16_t*>(rec + inv::kRecDefault) = t.newDefault;
-                    *reinterpret_cast<uint16_t*>(rec + inv::kRecMax) = t.newMax;
+                    *reinterpret_cast<uint16_t*>(rec + inv::RecDefault()) = t.newDefault;
+                    *reinterpret_cast<uint16_t*>(rec + inv::RecMax()) = t.newMax;
                     ++t.patches;
                 }
                 __except (EXCEPTION_EXECUTE_HANDLER) {}
@@ -200,10 +200,57 @@ namespace psm::capacity
             }
         }
 
+        // From 1.0.0.3840 a record has no name of its own and is named through its
+        // table entry, which needs the manager. A record read before the manager
+        // is up cannot be named yet, so the loader thread parks it here and the
+        // worker patches it a moment later. A record the game just filled stays in
+        // memory for 30 s, so a pointer this young is safe to write through.
+        constexpr int kPending = 64;
+        std::atomic<uintptr_t> g_pending[kPending];
+        std::atomic<ULONGLONG> g_pendingAt[kPending];
+        std::atomic<int> g_pendingSkipped{0};
+
+        // True when the record was patched or is not one of the targets.
+        bool TryPatch(uintptr_t rec)
+        {
+            char name[40];
+            if (!RecordName(rec, name, sizeof name)) return false;
+            PatchRecord(rec);
+            return true;
+        }
+
+        void Park(uintptr_t rec)
+        {
+            for (int i = 0; i < kPending; ++i)
+            {
+                uintptr_t none = 0;
+                if (g_pending[i].load() == rec) return;
+                if (g_pending[i].compare_exchange_strong(none, rec))
+                {
+                    g_pendingAt[i] = GetTickCount64();
+                    return;
+                }
+            }
+            ++g_pendingSkipped;
+        }
+
+        // A parked record is tried every 100 ms for 5 s and then dropped, long before
+        // the game can free it.
+        void DrainPending()
+        {
+            const ULONGLONG now = GetTickCount64();
+            for (int i = 0; i < kPending; ++i)
+            {
+                const uintptr_t rec = g_pending[i].load();
+                if (!rec) continue;
+                if (TryPatch(rec) || now - g_pendingAt[i].load() > 5000) g_pending[i].store(0);
+            }
+        }
+
         uintptr_t __fastcall hkRead(uintptr_t stream, uintptr_t rec, uintptr_t r8, uintptr_t r9)
         {
             const uintptr_t r = static_cast<Fn4>(oRead)(stream, rec, r8, r9);
-            if ((r & 0xFF) && rec && g_patching.load()) PatchRecord(rec);
+            if ((r & 0xFF) && rec && g_patching.load() && !TryPatch(rec)) Park(rec);
             return r;
         }
 
@@ -288,7 +335,8 @@ namespace psm::capacity
                 uintptr_t rec = 0;
                 char name[40] = "(not loaded)";
                 uint16_t d = 0, m = 0;
-                if (inv::RecordAt(arr, i, &rec)) { RecordName(rec, name, sizeof name); mem::Read16(rec + inv::kRecDefault, &d); mem::Read16(rec + inv::kRecMax, &m); }
+                inv::EntryName(arr, i, name, sizeof name);
+                if (inv::RecordAt(arr, i, &rec)) { mem::Read16(rec + inv::RecDefault(), &d); mem::Read16(rec + inv::RecMax(), &m); }
                 const Target* t = nullptr;
                 for (const Target& x : g_targets)
                     if (x.seen.load() && strcmp(name, x.name) == 0) t = &x;
@@ -348,7 +396,7 @@ namespace psm::capacity
             if (!FindBucket("CampWareHouse", b) || b.cap <= 0) return;
             const uintptr_t rec = RecordByName(t.name);
             uint16_t applied = 0;
-            if (!rec || !mem::Read16(rec + inv::kRecDefault, &applied)) return;
+            if (!rec || !mem::Read16(rec + inv::RecDefault(), &applied)) return;
             // The count the game asked for (+0x16), which AddExpand adds to and the
             // story's SetExpand sets, rather than capacity less the default: GameTick
             // trims capacity, and a trimmed reading is not the save's count.
@@ -426,7 +474,7 @@ namespace psm::capacity
                 if (const uintptr_t rec = RecordByName(t.name))
                 {
                     uint16_t d = 0, m = 0;
-                    if (mem::Read16(rec + inv::kRecDefault, &d) && mem::Read16(rec + inv::kRecMax, &m))
+                    if (mem::Read16(rec + inv::RecDefault(), &d) && mem::Read16(rec + inv::RecMax(), &m))
                     {
                         o.known = true;
                         o.appliedDefault = d;
@@ -467,6 +515,7 @@ namespace psm::capacity
             {
                 Sleep(100);
                 if (g_dump.exchange(false)) Dump();
+                DrainPending();
                 const DWORD tick = GetTickCount();
                 const ULONGLONG tick64 = GetTickCount64();
                 if (tick - g_sizesWanted.load() < 3000 && tick64 >= nextSizes) { RefreshSizes(); nextSizes = tick64 + 1000; }
@@ -491,7 +540,7 @@ namespace psm::capacity
             for (uint32_t i = 0; i < n; ++i)
             {
                 uintptr_t rec = 0;
-                if (inv::RecordAt(arr, i, &rec)) PatchRecord(rec);
+                if (inv::RecordAt(arr, i, &rec) && rec) PatchRecord(rec);
             }
         }
     }

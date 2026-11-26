@@ -40,8 +40,18 @@ namespace psm::addr
         // The manager's record table, read from the game's own lookup. The count
         // is the u32 at mgr+invMgrCount and record i is
         // [[mgr+invMgrArray] + i*invMgrStride + invMgrEntryRec]: 0x08, 0x58, 8, 0
-        // up to 1.0.0.3576 and 0x28, 0x20, 0x18, 8 on 1.0.0.3663.
+        // up to 1.0.0.3576, 0x28, 0x20, 0x18, 8 on 1.0.0.3663 to 3732 and 0x20,
+        // 0x18, 0x30, 0x20 on 1.0.0.3840.
         uint32_t invMgrCount = 0, invMgrArray = 0, invMgrStride = 0, invMgrEntryRec = 0;
+        // 1.0.0.3840 moved each record's name out of the record and into its table
+        // entry: a staticstringA node pointer at entry+invMgrEntryName, and the entry's
+        // own u16 key at entry+0 matches the u16 at the start of the record. 0 means
+        // the name is still in the record, at inv::kRecName.
+        uint32_t invMgrEntryName = 0;
+        // Where the reader puts the fields the mod edits. 3392 to 3732: needSave
+        // +0x0D, default +0x10, max +0x14. 3840: +0x0B, +0x0E, +0x12.
+        uint32_t recNeedSave = 0x0D, recDefault = 0x10, recMax = 0x14;
+        bool readerNamesInEntry = false;   // what the reader says about where the name lives; the table layout has to agree
         uintptr_t actorManagerGlobal = 0;
         uintptr_t clientMoveItem = 0;      // R5: client check and send for an inventory-to-inventory move
         uintptr_t inventoryHolderOf = 0;   // R3C 1.2: GetInventoryHolder(actor), follows a borrowed bag
@@ -50,6 +60,7 @@ namespace psm::addr
     struct Stacks
     {
         uintptr_t itemInfoRead = 0;   // (stream, ItemInfo record) -> bool
+        uint32_t keyAt = 8;           // the record's u32 item number: +0x08 up to 1.0.0.3732, +0x00 on 3840
     };
 
     // Each returns false and logs what is missing.

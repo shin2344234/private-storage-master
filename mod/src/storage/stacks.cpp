@@ -17,10 +17,10 @@ namespace psm::stacks
     {
         using Fn4 = uintptr_t(__fastcall*)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 
-        // ItemInfo on exe 1.0.0.3392, both checked by ResolveStacks. R9 section 2
-        // has the 2.03 layout, which was +0x18 and +0x00.
+        // ItemInfo on exe 1.0.0.3392, checked by ResolveStacks. R9 section 2 has the
+        // 2.03 layout, which was +0x18 and +0x00. The item number is four bytes at
+        // +0x08 up to 1.0.0.3732 and at +0x00 on 3840, and ResolveStacks reads which.
         constexpr unsigned kMaxStackCount = 0x10;   // eight bytes
-        constexpr unsigned kKey = 0x08;             // four bytes, the item number
         // No stack is taken past this. Fat Stacks' largest option is 999999 and
         // the game carries it in this same field, so it is a number the game is
         // known to cope with. A stock limit already at or past it is left alone:
@@ -84,7 +84,7 @@ namespace psm::stacks
             if (stock <= 1) { ++g_unstackable; return; }
             if (stock >= kCeiling) { ++g_huge; return; }
             uint32_t key = 0;
-            if (!mem::Read32(rec + kKey, &key)) return;
+            if (!mem::Read32(rec + g_addr.keyAt, &key)) return;
             for (const uint32_t k : kKeepStock)
                 if (key == k) return;
             int64_t want = stock * g_multiplier.load();

@@ -24,6 +24,12 @@ namespace psm::inv
     uintptr_t Manager(uint32_t* count, uintptr_t* records);
     // Record i of the table Manager returned. 1.0.0.3663 changed the entry layout.
     bool RecordAt(uintptr_t records, uint32_t i, uintptr_t* rec);
+    // The name of record i, whether or not the record itself is loaded. The game
+    // reads each record from the data file on first use and drops it again after
+    // 30 s unused, so RecordAt can say no for a record whose name is known.
+    bool EntryName(uintptr_t records, uint32_t i, char* out, size_t cap);
+    // The name of a record the game has in hand. From 1.0.0.3840 the record has no
+    // name of its own, so this finds its table entry by the record's key.
     bool RecordName(uintptr_t rec, char* out, size_t cap);
     bool IndexName(uint16_t index, char* out, size_t cap);
     uintptr_t RecordByName(const char* want);
@@ -31,11 +37,19 @@ namespace psm::inv
 
     // InventoryInfo record fields on exe 1.0.0.3392, which reordered the record
     // small fields first (2.03 had the name at +0x08, default +0x48, max +0x4A,
-    // needSave +0x9D). ResolveCapacity checks the reader writes these.
-    constexpr unsigned kRecName = 0x00;       // staticstringA node, first qword the text
-    constexpr unsigned kRecNeedSave = 0x0D;   // one byte: the save keeps the slot count
-    constexpr unsigned kRecDefault = 0x10;    // two bytes
-    constexpr unsigned kRecMax = 0x14;        // two bytes
+    // needSave +0x9D). ResolveCapacity reads where the small fields are out of the
+    // reader, since 1.0.0.3840 moved them again and dropped the name from the record:
+    //                 3392 to 3732   3840
+    //   name          +0x00 (node)   in the table entry, see Capacity::invMgrEntryName
+    //   key           +0x08 (u16)    +0x00 (u16)
+    //   needSave      +0x0D          +0x0B       one byte: the save keeps the slot count
+    //   default       +0x10          +0x0E       two bytes
+    //   max           +0x14          +0x12       two bytes
+    constexpr unsigned kRecName = 0x00;       // staticstringA node, first qword the text (3392 to 3732)
+    constexpr unsigned kRecKey = 0x00;        // u16 on 3840, the same value as the entry's key
+    unsigned RecNeedSave();
+    unsigned RecDefault();
+    unsigned RecMax();
     constexpr unsigned kRecMoveList = 0x38;   // pointer, count at +0x40, element stride 0xA0
     // _collectionItemList: pointer, u32 count at +0x98, u32 capacity at +0x9C,
     // 16-byte elements {u16 item, s64 limit at +8}. Read on 3663 from the field's
