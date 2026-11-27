@@ -1,0 +1,7 @@
+# GitHub's "Download ZIP" of the source is built with git archive, which leaves
+# these out. Definitive Mod Manager reads any loose .json as a JSON patch mod and
+# rejects release.json, and the old test builds would install a plugin for a
+# game build that is long gone. The release archives on Nexus and the Releases
+# page are built by package.ps1 and are not affected.
+release.json export-ignore
+docs/test-builds/ export-ignore
