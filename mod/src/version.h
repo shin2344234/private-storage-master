@@ -1,7 +1,7 @@
 #pragma once
 
 // Bump it with the release that goes with it, never on its own.
-#define PSM_VERSION  "1.1.15"
+#define PSM_VERSION  "1.1.16"
 #define PSM_NAME     "Private Storage Master"
 // The game builds the plugin was last released for: 2.02.00 (exe
 // 1.0.0.2850) through 2.03.02 (1.0.0.2976, 23 September 2026), with 2.03.00
@@ -12,12 +12,14 @@
 // the same holds through 1.0.0.3576 (2.04.08, 6 November 2026). 1.0.0.3663
 // (13 November 2026) needed three new patterns, kept beside the old ones.
 // 1.0.0.3732 (2.05.01) runs 1.1.14's anchors unchanged: a player log from
-// 1.1.14-wpot1 on it reached [mod] ready and set the storage sizes. The
+// 1.1.14-wpot1 on it reached [mod] ready and set the storage sizes. 1.0.0.3840
+// (2.06.00, 26 November 2026) moved the record fields, and 1.1.16 reads both
+// layouts. The
 // string is the exe versions until the patch's own name is confirmed. It has to fit
 // PsmStatus::gameVersion, which is char[16] and part of the shipped API, so keep
 // it to 15 characters. The longer "2.02.00 and 2.03.00" silently came back from
 // PsmGetStatus as "2.02.00 and 2.0".
-#define PSM_GAME     "1.0.0.3392-3732"
+#define PSM_GAME     "1.0.0.3392-3840"
 // What a test build calls itself, appended to PSM_VERSION wherever the version
 // is shown (the log's [mod] line and PsmStatus::version), so a log from a
 // diagnostic build can never be read as one from the release. It comes from

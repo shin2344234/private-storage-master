@@ -3,8 +3,17 @@
 A Crimson Desert plugin that opens Private Storage, the housing chests, the
 camp bins, Camp Provisions and Abyss gear storage from anywhere, in the game's
 own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
-the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3732 (2.05.01).
+the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3840 (2.06.00).
 For 2.02.00 to 2.03.02, use 1.1.7.
+
+New in 1.1.16: the plugin runs on 2.06.00, exe 1.0.0.3840, the update of 26
+November 2026, and still runs on every DLC build back to 1.0.0.3392. That update
+took each inventory record's name out of the record and moved the size fields,
+so the plugin now reads the table, the record fields and the bag lookup in both
+layouts. The 3840 port ran in the author's game on 26 November, and the log had
+no error lines, but nobody opened a storage window in that run. This release is
+not tested in play. Every key setting now accepts None, so INI Master's clear
+button works on all of them, CapacityDumpKey included.
 
 New in 1.1.15: the Weapon's Pot from MJ7L's Weapon's Pot mod works like the
 other storages. With Weapon's Pot 1.1 or later installed, loot storing sends
@@ -113,11 +122,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.15:
+SHA-256 for 1.1.16:
 
-    2b031df36ef4fa7be903b816fb2fc78095213e11c85c72d00a1f78e78c5c755a  PrivateStorageMaster-1.1.15-DMM.zip
-    9083ac3c9b3a46e0a9789fb5285573669eba21da3951f1cb1ae6e881c68a1e97  PrivateStorageMaster-1.1.15.zip
-    c527a5694c32b17f34c1c69f18716e8b80e6129f4972803d771611dab591766b  PrivateStorageMaster.asi
+    4c2695fc2b42478f932085f5d84927e38bd7b68453e7d75e9c5c99a919775866  PrivateStorageMaster-1.1.16-DMM.zip
+    def9d99f6df33cd89ad2cd20a087d4ec557ef759081daf975e125798417b4845  PrivateStorageMaster-1.1.16.zip
+    9d7feffaef315461eaf640cd7a715262abdfa3a9f177c5bcd287c31d295c2268  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
