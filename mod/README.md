@@ -1,4 +1,4 @@
-Private Storage Master 1.1.16 for Crimson Desert 1.0.0.3392 to 1.0.0.3840
+Private Storage Master 1.1.17 for Crimson Desert 1.0.0.3392 to 1.0.0.3840
 ========================================================================
 
 Opens storage from anywhere in the game's own warehouse screen, sets each
@@ -8,7 +8,7 @@ Looter puts your loot straight into storage.
 Install
 -------
 
-1.1.16 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3840
+1.1.17 runs only on the DLC update, exe 1.0.0.3392 through 1.0.0.3840
 (2.06.00). On 2.02.00 to 2.03.02, use 1.1.7, which stays on the Files tab.
 Your ini carries over either way. On 2.05.00, 1.1.11 stored no loot, and
 1.1.12 is the first version that does. 1.1.13 turns Bird Feed off for loot
@@ -20,7 +20,8 @@ now reads both layouts, so it still runs on every build back to 1.0.0.3392. The
 3840 port ran in the author's game on 26 November and the log had no error
 lines, but nobody opened a storage window, so 1.1.16 is not tested in play. Every
 key setting also accepts None now, so INI Master's clear button works on all of
-them.
+them. 1.1.17 changes only the GitHub source zip, which no longer carries
+release.json, and the plugin works the same as 1.1.16.
 
 1. Remove PrivateStorageAnywhere.asi from bin64 and disable it in your mod
    manager. Leave its ini in place for the first launch so your bindings are

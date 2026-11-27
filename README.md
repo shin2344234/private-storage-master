@@ -6,6 +6,12 @@ own warehouse screen, and sets each storage's size up to 1,460 slots. Built for
 the Crimson Desert DLC update, exe 1.0.0.3392 through 1.0.0.3840 (2.06.00).
 For 2.02.00 to 2.03.02, use 1.1.7.
 
+New in 1.1.17: the GitHub source zip no longer holds `release.json` or the old
+test builds. Definitive Mod Manager read that `release.json` as a broken JSON
+patch and refused the whole download. The source zip is still not an install,
+so take the two zips from Nexus or the Releases page. The plugin works the same
+as 1.1.16. Reported by Braik4One.
+
 New in 1.1.16: the plugin runs on 2.06.00, exe 1.0.0.3840, the update of 26
 November 2026, and still runs on every DLC build back to 1.0.0.3392. That update
 took each inventory record's name out of the record and moved the size fields,
@@ -126,11 +132,11 @@ storing on it asks the game to move items the way the warehouse screen does,
 and the game saves that as it would any move. Every line is here to read or
 build yourself.
 
-SHA-256 for 1.1.16:
+SHA-256 for 1.1.17:
 
-    4c2695fc2b42478f932085f5d84927e38bd7b68453e7d75e9c5c99a919775866  PrivateStorageMaster-1.1.16-DMM.zip
-    def9d99f6df33cd89ad2cd20a087d4ec557ef759081daf975e125798417b4845  PrivateStorageMaster-1.1.16.zip
-    9d7feffaef315461eaf640cd7a715262abdfa3a9f177c5bcd287c31d295c2268  PrivateStorageMaster.asi
+    28213a2df63d1e740dbbf16cf153ceb13be317ba6094d8d0a61592585a00b076  PrivateStorageMaster-1.1.17-DMM.zip
+    68915416eb2adbdcf63d0b7721609d676f8b80ca12c9e01c3a90b235ae0fc3d0  PrivateStorageMaster-1.1.17.zip
+    e0e0e2a30be26675aa138fe027cf2ddb71507990e921594643f5935b20e3eca6  PrivateStorageMaster.asi
 
 ## Discord and Patreon
 
